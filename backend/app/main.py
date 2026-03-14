@@ -29,13 +29,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
-origins = settings.ALLOWED_ORIGINS.split(",")
-is_wildcard = origins == ["*"]
+# CORS — JWT Bearer kullanıldığı için credentials gerekmez
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if is_wildcard else origins,
-    allow_credentials=not is_wildcard,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

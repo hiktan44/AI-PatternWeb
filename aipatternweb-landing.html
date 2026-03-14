@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI-PatternWeb — Üretim Güvenli Kalıp Mühendisliği</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0d0d0d;
+  --bg: #ffffff;
+  --muted: #6b6b6b;
+  --accent1: #ff4d2e;
+  --accent2: #1a56ff;
+  --accent3: #00c896;
+  --accent4: #ffb800;
+  --accent5: #c026d3;
+  --surface: #f7f6f3;
+  --border: rgba(13,13,13,0.1);
+  --r: 16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);overflow-x:hidden;line-height:1.6}
+h1,h2,h3,h4,.display{font-family:'Syne',sans-serif}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:18px 5%;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;display:flex;align-items:center;gap:8px}
+.logo-dot{width:10px;height:10px;background:var(--accent1);border-radius:50%;display:inline-block;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.4)}}
+.nav-links{display:flex;align-items:center;gap:32px}
+.nav-links a{text-decoration:none;color:var(--muted);font-size:14px;font-weight:500;transition:color .2s}
+.nav-links a:hover{color:var(--ink)}
+.nav-cta{background:var(--ink);color:#fff;padding:10px 22px;border-radius:100px;font-size:14px;font-weight:600;text-decoration:none;transition:transform .2s,box-shadow .2s}
+.nav-cta:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.18)}
+
+/* HERO */
+.hero{min-height:100vh;padding:140px 5% 80px;display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:60px;position:relative;overflow:hidden}
+.hero-bg-blob{position:absolute;pointer-events:none;z-index:0}
+.blob1{top:-200px;right:-100px;width:600px;height:600px;background:radial-gradient(circle,rgba(255,77,46,0.12) 0%,transparent 70%);border-radius:50%}
+.blob2{bottom:-150px;left:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(26,86,255,0.1) 0%,transparent 70%);border-radius:50%}
+.hero-left{position:relative;z-index:1}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:6px 14px 6px 8px;font-size:13px;font-weight:500;margin-bottom:28px}
+.badge-dot{width:8px;height:8px;background:var(--accent3);border-radius:50%}
+h1.headline{font-size:clamp(42px,5vw,68px);font-weight:800;line-height:1.05;letter-spacing:-2px;margin-bottom:24px}
+.headline .hi{color:var(--accent1)}
+.headline .hb{color:var(--accent2)}
+.hero-sub{font-size:18px;color:var(--muted);max-width:480px;line-height:1.7;margin-bottom:40px;font-weight:300}
+.hero-actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.btn-primary{background:var(--ink);color:#fff;padding:16px 32px;border-radius:100px;font-size:16px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:10px;transition:transform .25s,box-shadow .25s}
+.btn-primary:hover{transform:translateY(-3px);box-shadow:0 12px 32px rgba(0,0,0,0.2)}
+.btn-primary svg{transition:transform .2s}
+.btn-primary:hover svg{transform:translateX(4px)}
+.btn-secondary{color:var(--ink);padding:16px 24px;font-size:16px;font-weight:500;text-decoration:none;display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--border);border-radius:100px;transition:border-color .2s}
+.btn-secondary:hover{border-color:var(--ink)}
+.hero-stats{display:flex;gap:36px;margin-top:52px;padding-top:36px;border-top:1px solid var(--border)}
+.stat-num{font-family:'Syne',sans-serif;font-size:28px;font-weight:800}
+.stat-label{font-size:13px;color:var(--muted);margin-top:2px}
+
+/* HERO VISUAL */
+.hero-right{position:relative;z-index:1}
+.hero-canvas{background:var(--surface);border-radius:24px;overflow:hidden;aspect-ratio:1.1;position:relative;border:1px solid var(--border);box-shadow:0 24px 64px rgba(0,0,0,0.08)}
+.canvas-header{background:#fff;padding:14px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.win-dot{width:12px;height:12px;border-radius:50%}
+.w1{background:#ff5f57}.w2{background:#febc2e}.w3{background:#28c840}
+.canvas-toolbar{padding:10px 18px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border);background:#fafaf8}
+.tool-btn{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px}
+.tool-btn.active{background:var(--accent2);color:#fff}
+.tool-btn:not(.active):hover{background:var(--border)}
+.canvas-body{padding:24px;position:relative;display:flex;align-items:center;justify-content:center;min-height:320px;background:white}
+.canvas-grid{position:absolute;inset:0;background-image:radial-gradient(circle,#d4d4d4 1px,transparent 1px);background-size:24px 24px;opacity:0.5}
+
+/* PATTERN SVG */
+.pattern-svg{position:relative;z-index:1}
+.part-label{font-size:11px;font-family:'DM Sans',sans-serif;fill:#888}
+.seam-line{stroke-dasharray:4 3;animation:dashMove 3s linear infinite}
+@keyframes dashMove{to{stroke-dashoffset:-28}}
+.confidence-badge{position:absolute;top:16px;right:16px;background:rgba(0,200,150,0.12);border:1px solid rgba(0,200,150,0.3);color:#009a6e;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif}
+.ai-scan{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent2),transparent);animation:scanDown 3s ease-in-out infinite;top:0}
+@keyframes scanDown{0%{top:0;opacity:0}20%{opacity:1}80%{opacity:1}100%{top:100%;opacity:0}}
+
+/* FLOATING CARDS */
+.float-card{position:absolute;background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.12);padding:12px 16px;font-size:13px;font-weight:500;border:1px solid var(--border);white-space:nowrap;z-index:10}
+.fc1{bottom:-20px;left:-24px;animation:float1 4s ease-in-out infinite}
+.fc2{top:20px;left:-40px;animation:float2 5s ease-in-out infinite}
+.fc3{bottom:60px;right:-36px;animation:float3 4.5s ease-in-out infinite}
+@keyframes float1{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes float2{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
+@keyframes float3{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.fc-icon{width:24px;height:24px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;margin-right:8px}
+.fc-row{display:flex;align-items:center}
+.fc-val{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-right:6px}
+.fc-green{color:var(--accent3)}
+.fc-blue{color:var(--accent2)}
+
+/* LOGOS */
+.logos-section{padding:32px 5%;border-top:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:0;overflow:hidden;background:var(--surface)}
+.logos-label{font-size:13px;color:var(--muted);font-weight:500;white-space:nowrap;margin-right:40px;min-width:140px}
+.logos-track{display:flex;gap:52px;animation:scrollLogos 20s linear infinite;align-items:center}
+@keyframes scrollLogos{to{transform:translateX(-50%)}}
+.logo-item{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:#bbb;white-space:nowrap;letter-spacing:-0.5px;transition:color .2s}
+
+/* FEATURES */
+.features{padding:100px 5%}
+.section-label{font-size:13px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--accent2);margin-bottom:16px}
+.section-title{font-size:clamp(32px,4vw,52px);font-weight:800;letter-spacing:-1.5px;line-height:1.1;max-width:600px;margin-bottom:16px}
+.section-sub{font-size:17px;color:var(--muted);max-width:500px;line-height:1.7;font-weight:300;margin-bottom:64px}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border)}
+.feature-card{background:#fff;padding:40px 36px;transition:background .2s}
+.feature-card:hover{background:var(--surface)}
+.feature-icon{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:24px}
+.fi1{background:#fff0ee}.fi2{background:#eef2ff}.fi3{background:#edfdf7}.fi4{background:#fffbea}.fi5{background:#fdf4ff}.fi6{background:#f0fff9}
+.feature-card h3{font-size:19px;font-weight:700;margin-bottom:10px;letter-spacing:-0.5px}
+.feature-card p{font-size:15px;color:var(--muted);line-height:1.7;font-weight:300}
+
+/* HOW IT WORKS */
+.how{padding:100px 5%;background:var(--ink);color:#fff;overflow:hidden;position:relative}
+.how .section-label{color:var(--accent3)}
+.how .section-title{color:#fff}
+.how .section-sub{color:rgba(255,255,255,0.6)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;margin-top:0;background:rgba(255,255,255,0.06)}
+.step{padding:40px 32px;background:var(--ink);transition:background .2s}
+.step:hover{background:#111}
+.step-num{font-family:'Syne',sans-serif;font-size:48px;font-weight:800;opacity:0.12;margin-bottom:20px;display:block}
+.step h3{font-size:17px;font-weight:700;margin-bottom:10px;letter-spacing:-0.3px}
+.step p{font-size:14px;color:rgba(255,255,255,0.5);line-height:1.7;font-weight:300}
+.step-accent{width:32px;height:3px;border-radius:2px;margin-bottom:20px}
+.sa1{background:var(--accent1)}.sa2{background:var(--accent2)}.sa3{background:var(--accent3)}.sa4{background:var(--accent4)}
+
+/* VIDEO SECTION */
+.video-section{padding:100px 5%}
+.video-wrap{position:relative;border-radius:24px;overflow:hidden;aspect-ratio:16/9;background:var(--ink);box-shadow:0 40px 80px rgba(0,0,0,0.18)}
+.video-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px;background:linear-gradient(135deg,#0d0d0d 0%,#1a1a2e 50%,#0d1b2a 100%)}
+.video-pattern{position:absolute;inset:0;opacity:0.06;background-image:repeating-linear-gradient(0deg,#fff 0px,#fff 1px,transparent 1px,transparent 48px),repeating-linear-gradient(90deg,#fff 0px,#fff 1px,transparent 1px,transparent 48px)}
+.play-btn{width:80px;height:80px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative;z-index:1}
+.play-btn:hover{transform:scale(1.1);box-shadow:0 0 0 16px rgba(255,255,255,0.1)}
+.play-btn svg{margin-left:5px}
+.video-title{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#fff;position:relative;z-index:1;text-align:center;letter-spacing:-0.5px}
+.video-sub{color:rgba(255,255,255,0.5);font-size:15px;position:relative;z-index:1;text-align:center}
+
+/* FLOATING DEMO ELEMENTS */
+.demo-elements{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+.demo-el{position:absolute;border-radius:12px;opacity:0.85}
+.de1{top:15%;left:5%;width:140px;background:rgba(255,77,46,0.15);border:1px solid rgba(255,77,46,0.3);padding:12px;animation:float1 5s ease-in-out infinite}
+.de2{top:25%;right:6%;width:160px;background:rgba(26,86,255,0.15);border:1px solid rgba(26,86,255,0.3);padding:12px;animation:float2 6s ease-in-out infinite}
+.de3{bottom:20%;left:8%;width:150px;background:rgba(0,200,150,0.15);border:1px solid rgba(0,200,150,0.3);padding:12px;animation:float3 5.5s ease-in-out infinite}
+.demo-text{font-size:11px;color:rgba(255,255,255,0.7);font-family:'DM Sans',sans-serif}
+.demo-val{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;color:#fff}
+
+/* PRICING */
+.pricing{padding:100px 5%;background:var(--surface)}
+.pricing-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:64px}
+.price-card{background:#fff;border-radius:20px;padding:36px 32px;border:1.5px solid var(--border);position:relative;transition:transform .25s,box-shadow .25s}
+.price-card:hover{transform:translateY(-6px);box-shadow:0 24px 48px rgba(0,0,0,0.1)}
+.price-card.featured{border-color:var(--accent2);background:var(--ink);color:#fff}
+.featured-badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:var(--accent2);color:#fff;border-radius:100px;padding:4px 16px;font-size:12px;font-weight:700;white-space:nowrap}
+.plan-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.price-card.featured .plan-name{color:rgba(255,255,255,0.5)}
+.price-amount{font-family:'Syne',sans-serif;font-size:42px;font-weight:800;letter-spacing:-2px;margin-bottom:4px}
+.price-period{font-size:14px;color:var(--muted);margin-bottom:24px}
+.price-card.featured .price-period{color:rgba(255,255,255,0.5)}
+.price-desc{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:28px;padding-bottom:28px;border-bottom:1px solid var(--border)}
+.price-card.featured .price-desc{color:rgba(255,255,255,0.6);border-bottom-color:rgba(255,255,255,0.1)}
+.price-features{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:32px}
+.price-features li{font-size:14px;display:flex;align-items:center;gap:10px;color:var(--muted)}
+.price-card.featured .price-features li{color:rgba(255,255,255,0.7)}
+.pf-check{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.pfc-green{background:#edfdf7;color:#009a6e}
+.pfc-blue{background:rgba(26,86,255,0.15);color:var(--accent2)}
+.btn-plan{display:block;text-align:center;padding:14px;border-radius:100px;font-size:14px;font-weight:600;text-decoration:none;transition:all .2s;border:1.5px solid var(--border)}
+.btn-plan:hover{background:var(--surface)}
+.btn-plan-accent{background:var(--accent2);color:#fff;border-color:var(--accent2)}
+.btn-plan-accent:hover{background:#0d44e8;box-shadow:0 8px 24px rgba(26,86,255,0.3)}
+
+/* TESTIMONIALS */
+.testimonials{padding:100px 5%}
+.testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:64px}
+.testi-card{background:var(--surface);border-radius:20px;padding:36px 32px;border:1px solid var(--border)}
+.testi-stars{color:var(--accent4);font-size:18px;margin-bottom:20px;letter-spacing:2px}
+.testi-text{font-size:16px;line-height:1.75;color:var(--ink);font-weight:300;margin-bottom:28px}
+.testi-author{display:flex;align-items:center;gap:14px}
+.testi-avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:#fff;flex-shrink:0}
+.ta1{background:linear-gradient(135deg,var(--accent1),#ff8a65)}
+.ta2{background:linear-gradient(135deg,var(--accent2),#60a5fa)}
+.ta3{background:linear-gradient(135deg,var(--accent5),#e879f9)}
+.testi-name{font-weight:600;font-size:14px}
+.testi-role{font-size:13px;color:var(--muted)}
+
+/* CTA */
+.cta-section{padding:100px 5%;background:var(--ink);position:relative;overflow:hidden;text-align:center}
+.cta-blob1{position:absolute;top:-200px;left:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(255,77,46,0.2),transparent 70%);border-radius:50%}
+.cta-blob2{position:absolute;bottom:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(26,86,255,0.2),transparent 70%);border-radius:50%}
+.cta-content{position:relative;z-index:1}
+.cta-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:100px;padding:6px 16px;font-size:13px;font-weight:500;color:rgba(255,255,255,0.7);margin-bottom:28px}
+.cta-title{font-size:clamp(40px,5vw,64px);font-weight:800;color:#fff;letter-spacing:-2px;line-height:1.05;margin-bottom:20px}
+.cta-sub{font-size:18px;color:rgba(255,255,255,0.5);max-width:500px;margin:0 auto 44px;font-weight:300}
+.cta-actions{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap}
+.btn-white{background:#fff;color:var(--ink);padding:18px 36px;border-radius:100px;font-size:16px;font-weight:700;text-decoration:none;transition:transform .2s,box-shadow .2s;display:inline-flex;align-items:center;gap:10px}
+.btn-white:hover{transform:translateY(-3px);box-shadow:0 16px 40px rgba(0,0,0,0.3)}
+.btn-ghost{color:rgba(255,255,255,0.7);padding:18px 28px;font-size:16px;text-decoration:none;border:1px solid rgba(255,255,255,0.2);border-radius:100px;transition:border-color .2s}
+.btn-ghost:hover{border-color:rgba(255,255,255,0.5);color:#fff}
+.cta-note{margin-top:24px;font-size:14px;color:rgba(255,255,255,0.35)}
+
+/* FOOTER */
+footer{padding:60px 5% 40px;border-top:1px solid var(--border)}
+.footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:60px;margin-bottom:60px}
+.footer-brand .logo{margin-bottom:16px;display:block}
+.footer-desc{font-size:14px;color:var(--muted);line-height:1.7;max-width:240px}
+.footer-col h4{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:20px;letter-spacing:0.5px}
+.footer-links{list-style:none;display:flex;flex-direction:column;gap:10px}
+.footer-links a{font-size:14px;color:var(--muted);text-decoration:none;transition:color .2s}
+.footer-links a:hover{color:var(--ink)}
+.footer-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:32px;border-top:1px solid var(--border);font-size:13px;color:var(--muted)}
+.footer-tags{display:flex;gap:8px}
+.tag{background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:3px 12px;font-size:12px}
+
+/* SCROLL ANIMATIONS */
+.reveal{opacity:0;transform:translateY(30px);transition:opacity .7s ease,transform .7s ease}
+.reveal.visible{opacity:1;transform:translateY(0)}
+
+@media(max-width:1024px){
+  .hero{grid-template-columns:1fr;padding-top:120px}
+  .hero-right{display:none}
+  .features-grid{grid-template-columns:repeat(2,1fr)}
+  .steps{grid-template-columns:repeat(2,1fr)}
+  .pricing-grid{grid-template-columns:repeat(2,1fr)}
+  .testi-grid{grid-template-columns:1fr}
+  .footer-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:640px){
+  .nav-links{display:none}
+  .features-grid{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr}
+  .pricing-grid{grid-template-columns:1fr}
+  .hero-stats{gap:20px}
+  .hero-actions{flex-direction:column;align-items:flex-start}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">
+    <span class="logo-dot"></span>
+    AI-PatternWeb
+  </div>
+  <div class="nav-links">
+    <a href="#features">Özellikler</a>
+    <a href="#how">Nasıl Çalışır</a>
+    <a href="#pricing">Fiyatlar</a>
+    <a href="#demo">Demo</a>
+  </div>
+  <a href="#pricing" class="nav-cta">Ücretsiz Başla</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg-blob blob1"></div>
+  <div class="hero-bg-blob blob2"></div>
+  
+  <div class="hero-left">
+    <div class="hero-badge">
+      <span class="badge-dot"></span>
+      Yeni: Stripe Eşleşmeli Otomatik Marker
+    </div>
+    <h1 class="headline">
+      Fotoğraftan<br>
+      <span class="hi">üretime hazır</span><br>
+      <span class="hb">kalıba.</span>
+    </h1>
+    <p class="hero-sub">
+      Görsel, eskiz veya ölçü tablosu yükleyin. Yapay zeka destekli, kural tabanlı sistemimiz sizi DXF export'a kadar güvenle taşısın.
+    </p>
+    <div class="hero-actions">
+      <a href="#pricing" class="btn-primary">
+        14 Gün Ücretsiz Dene
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+      <a href="#demo" class="btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 5.5l4 2.5-4 2.5V5.5z" fill="currentColor"/></svg>
+        Demo İzle
+      </a>
+    </div>
+    <div class="hero-stats">
+      <div>
+        <div class="stat-num">94%</div>
+        <div class="stat-label">Ölçü doğruluk oranı</div>
+      </div>
+      <div>
+        <div class="stat-num">12x</div>
+        <div class="stat-label">Manuel kalıba kıyasla hız</div>
+      </div>
+      <div>
+        <div class="stat-num">%8</div>
+        <div class="stat-label">Ortalama fire düşüşü</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-right">
+    <div style="position:relative">
+      <div class="hero-canvas">
+        <div class="canvas-header">
+          <div class="win-dot w1"></div>
+          <div class="win-dot w2"></div>
+          <div class="win-dot w3"></div>
+          <span style="margin-left:10px;font-size:13px;color:#888;font-family:'DM Sans',sans-serif">gömlek_v3.dxf — AI-PatternWeb</span>
+        </div>
+        <div class="canvas-toolbar">
+          <div class="tool-btn active">✦</div>
+          <div class="tool-btn">⊕</div>
+          <div class="tool-btn">⊖</div>
+          <div class="tool-btn">↩</div>
+          <div style="flex:1"></div>
+          <span style="font-size:12px;color:#888;font-family:'DM Sans',sans-serif">Erkek Basic Gömlek — M</span>
+        </div>
+        <div class="canvas-body">
+          <div class="canvas-grid"></div>
+          <div class="ai-scan"></div>
+          <svg class="pattern-svg" width="320" height="280" viewBox="0 0 320 280">
+            <!-- Ön Beden -->
+            <g>
+              <path d="M80,40 L100,30 L140,26 L180,26 L220,30 L240,40 L240,46 L220,52 L210,220 L110,220 L100,52 L80,46 Z" 
+                fill="rgba(26,86,255,0.06)" stroke="#1a56ff" stroke-width="1.5" stroke-linejoin="round"/>
+              <text x="160" y="130" text-anchor="middle" class="part-label">ÖN BEDEN</text>
+              <!-- Yaka -->
+              <path d="M140,26 Q160,38 180,26" fill="none" stroke="#1a56ff" stroke-width="1.2"/>
+              <!-- Pens -->
+              <line x1="130" y1="100" x2="145" y2="130" stroke="#ff4d2e" stroke-width="1" stroke-dasharray="3 2"/>
+              <line x1="145" y1="130" x2="135" y2="160" stroke="#ff4d2e" stroke-width="1" stroke-dasharray="3 2"/>
+              <!-- Dikiş payı -->
+              <path d="M74,38 L95,27 L140,22 L180,22 L225,27 L246,38 L246,48 L225,55 L215,226 L105,226 L95,55 L74,48 Z"
+                fill="none" stroke="#ff4d2e" stroke-width="0.8" stroke-dasharray="5 3" opacity="0.5" class="seam-line"/>
+            </g>
+            <!-- Kol -->
+            <g>
+              <path d="M28,60 L72,56 L80,130 L36,138 Z"
+                fill="rgba(0,200,150,0.08)" stroke="#00c896" stroke-width="1.5" stroke-linejoin="round"/>
+              <text x="52" y="100" text-anchor="middle" class="part-label" style="font-size:9px">KOL</text>
+              <path d="M22,58 L74,53 L83,133 L30,142 Z"
+                fill="none" stroke="#00c896" stroke-width="0.7" stroke-dasharray="4 3" opacity="0.5" class="seam-line"/>
+            </g>
+            <!-- Arka Beden -->
+            <g>
+              <path d="M248,40 L266,30 L280,26 L300,26 L318,30 L320,50 L300,58 L294,220 L260,220 L254,58 Z"
+                fill="rgba(255,184,0,0.07)" stroke="#ffb800" stroke-width="1.5" stroke-linejoin="round"/>
+              <text x="285" y="130" text-anchor="middle" class="part-label" style="font-size:9px">ARKA</text>
+            </g>
+            <!-- Notch işaretleri -->
+            <rect x="109" y="219" width="2" height="6" fill="#1a56ff" rx="1"/>
+            <rect x="209" y="219" width="2" height="6" fill="#1a56ff" rx="1"/>
+            <rect x="79" y="98" width="6" height="2" fill="#00c896" rx="1"/>
+            <!-- Grainline -->
+            <line x1="160" y1="165" x2="160" y2="205" stroke="#888" stroke-width="1"/>
+            <polygon points="160,162 157,168 163,168" fill="#888"/>
+            <polygon points="160,208 157,202 163,202" fill="#888"/>
+          </svg>
+          <div class="confidence-badge">✓ QA Passed</div>
+        </div>
+      </div>
+
+      <!-- Floating cards -->
+      <div class="float-card fc1">
+        <div class="fc-row">
+          <div class="fc-icon" style="background:#edfdf7">📐</div>
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:2px">Ölçü uyumu</div>
+            <div style="display:flex;align-items:baseline;gap:4px">
+              <span class="fc-val fc-green">94.2%</span>
+              <span style="font-size:11px;color:var(--accent3)">↑</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="float-card fc2">
+        <div class="fc-row">
+          <div class="fc-icon" style="background:#fff0ee">🔥</div>
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:2px">Pastal fire</div>
+            <div style="display:flex;align-items:baseline;gap:4px">
+              <span class="fc-val" style="color:var(--accent1)">%7.4</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="float-card fc3">
+        <div class="fc-row">
+          <div class="fc-icon" style="background:#eef2ff">⚡</div>
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:2px">İşlem süresi</div>
+            <div class="fc-val fc-blue">42 sn</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LOGOS -->
+<div class="logos-section">
+  <div class="logos-label">Güvenen markalar</div>
+  <div class="logos-track" id="logoTrack">
+    <div class="logo-item">KOTON</div>
+    <div class="logo-item">AVVA</div>
+    <div class="logo-item">LCW</div>
+    <div class="logo-item">MAVI</div>
+    <div class="logo-item">BOYNER</div>
+    <div class="logo-item">KIĞILI</div>
+    <div class="logo-item">HUMMEL</div>
+    <div class="logo-item">SARAR</div>
+    <div class="logo-item">KOTON</div>
+    <div class="logo-item">AVVA</div>
+    <div class="logo-item">LCW</div>
+    <div class="logo-item">MAVI</div>
+    <div class="logo-item">BOYNER</div>
+    <div class="logo-item">KIĞILI</div>
+    <div class="logo-item">HUMMEL</div>
+    <div class="logo-item">SARAR</div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="reveal">
+    <div class="section-label">Özellikler</div>
+    <h2 class="section-title">Üretim zincirinin her adımı için</h2>
+    <p class="section-sub">Fotoğraftan export'a kadar her aşamada doğrulama katmanlı, kural tabanlı mühendislik.</p>
+  </div>
+  <div class="features-grid reveal">
+    <div class="feature-card">
+      <div class="feature-icon fi1">📸</div>
+      <h3>Görselden Kalıp Çıkarımı</h3>
+      <p>Ürün fotoğrafı, eskiz veya teknik çizim yükleyin. AI otomatik kategori tespit ederek ön kalıp taslağını oluşturur. Düşük güven skorunda sistem size soru sorar.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon fi2">📏</div>
+      <h3>Ölçü Kalibrasyon Motoru</h3>
+      <p>Kütüphane + ölçü tablosu + kullanıcı onayı üçlüsüyle çalışır. Tolerans dışı her bölge işaretlenir. Sistem emin olmadığını asla gizlemez.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon fi3">⚡</div>
+      <h3>Otomatik Serileme</h3>
+      <p>Baz bedenden hedef beden setini saniyeler içinde türetin. TSE, EU ve ABD standartları dahili. Nokta bazlı grading özelleştirme desteği.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon fi4">🧵</div>
+      <h3>Dikiş Payı Yönetimi</h3>
+      <p>Segment bazlı dikiş payı tanımlaması. Notch, drill, grainline, fold mark ve annotation otomatik. Üretim kuralı kütüphanesi kaydedilebilir.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon fi5">📦</div>
+      <h3>Minimum Fireli Pastal</h3>
+      <p>Kumaş eni, nap yönü, desen eşleşmesi ve serim tipine göre optimum marker. Fire raporunu indirin, alternatif yerleşimleri karşılaştırın.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon fi6">✅</div>
+      <h3>QA Validation ve Export</h3>
+      <p>Export öncesi 40+ otomatik kontrol. Açık contour, eksik grainline veya isimsiz parça varsa export kilitlenir. DXF, PDF ve üretim raporu.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="reveal">
+    <div class="section-label">Süreç</div>
+    <h2 class="section-title">4 adımda üretime hazır kalıp</h2>
+    <p class="section-sub">Her adımda sistem ya sizi yönlendirir ya da onayınızı alır. Hata üretime gitmez.</p>
+  </div>
+  <div class="steps reveal" style="margin-top:56px">
+    <div class="step">
+      <span class="step-num">01</span>
+      <div class="step-accent sa1"></div>
+      <h3>Görsel veya Çizim Yükle</h3>
+      <p>Fotoğraf, eskiz, teknik çizim veya DXF. Sistem kalite kontrolü yapar, ürün kategorisini tespit eder ve ön kalıp yapısını çıkarır.</p>
+    </div>
+    <div class="step">
+      <span class="step-num">02</span>
+      <div class="step-accent sa2"></div>
+      <h3>Ölçü ve Onay</h3>
+      <p>Belirsiz alanlar için yapılandırılmış sorular sorulur. Ölçü tablosu verilir, sistem parametrik oturtma yapar ve kalıbı kilitler.</p>
+    </div>
+    <div class="step">
+      <span class="step-num">03</span>
+      <div class="step-accent sa3"></div>
+      <h3>Seri ve Pastal</h3>
+      <p>Beden serisi otomatik oluşur. Kumaş eni ve serim tipi girilir, minimum fireli marker hesaplanır. Fire raporu hazır.</p>
+    </div>
+    <div class="step">
+      <span class="step-num">04</span>
+      <div class="step-accent sa4"></div>
+      <h3>QA ve Export</h3>
+      <p>40+ otomatik kontrol. Passed statüsünde DXF, PDF ve üretim raporu export edilir. Lectra, Gerber ve benzeri CAD sistemleriyle uyumlu.</p>
+    </div>
+  </div>
+</section>
+
+<!-- VIDEO DEMO -->
+<section class="video-section" id="demo">
+  <div class="reveal" style="text-align:center;margin-bottom:40px">
+    <div class="section-label" style="justify-content:center;display:flex">Demo</div>
+    <h2 class="section-title" style="margin:0 auto;text-align:center">Görmek inanmaktır</h2>
+  </div>
+  <div class="video-wrap reveal">
+    <div class="video-overlay">
+      <div class="video-pattern"></div>
+      <div class="demo-elements">
+        <div class="demo-el de1">
+          <div class="demo-text">Kalıp parçası</div>
+          <div class="demo-val">Ön Beden</div>
+          <div class="demo-text" style="color:var(--accent3);margin-top:4px">✓ Doğrulandı</div>
+        </div>
+        <div class="demo-el de2">
+          <div class="demo-text">Confidence</div>
+          <div class="demo-val">96.4%</div>
+          <div class="demo-text" style="color:var(--accent4);margin-top:4px">▲ Yüksek</div>
+        </div>
+        <div class="demo-el de3">
+          <div class="demo-text">Süre</div>
+          <div class="demo-val">38 sn</div>
+          <div class="demo-text" style="color:var(--accent3);margin-top:4px">Analiz tamam</div>
+        </div>
+      </div>
+      <div class="play-btn" onclick="alert('Video yakında! Demo için iletişime geçin.')">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M8 5l11 7-11 7V5z" fill="#0d0d0d"/></svg>
+      </div>
+      <div class="video-title">Fotoğraftan DXF'e: Canlı Demo</div>
+      <div class="video-sub">Basic gömlek — 45 saniye — Gerber uyumlu çıktı</div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <div class="reveal" style="text-align:center">
+    <div class="section-label" style="display:flex;justify-content:center">Fiyatlar</div>
+    <h2 class="section-title" style="margin:0 auto;text-align:center">Her ölçeğe uygun plan</h2>
+    <p class="section-sub" style="margin:16px auto;text-align:center">14 gün ücretsiz deneyin. Kredi kartı gerekmez.</p>
+  </div>
+  <div class="pricing-grid reveal">
+    <div class="price-card">
+      <div class="plan-name">Starter</div>
+      <div class="price-amount">Ücretsiz</div>
+      <div class="price-period">Sonsuza kadar</div>
+      <div class="price-desc">Öğrenciler ve freelancer'lar için temel özellikler.</div>
+      <ul class="price-features">
+        <li><div class="pf-check pfc-green">✓</div>3 proje/ay</li>
+        <li><div class="pf-check pfc-green">✓</div>Temel kategoriler</li>
+        <li><div class="pf-check pfc-green">✓</div>Watermark'lı PDF export</li>
+        <li><div class="pf-check pfc-green">✓</div>Basic serileme</li>
+      </ul>
+      <a href="#" class="btn-plan">Başla</a>
+    </div>
+    <div class="price-card">
+      <div class="plan-name">Professional</div>
+      <div class="price-amount">₺1.490</div>
+      <div class="price-period">/ay · yıllıkta %20 indirim</div>
+      <div class="price-desc">Atölyeler, KOBİ markalar ve freelance modelistler için.</div>
+      <ul class="price-features">
+        <li><div class="pf-check pfc-green">✓</div>30 proje/ay</li>
+        <li><div class="pf-check pfc-green">✓</div>Tüm kategoriler</li>
+        <li><div class="pf-check pfc-green">✓</div>DXF export (watermark'sız)</li>
+        <li><div class="pf-check pfc-green">✓</div>Gelişmiş serileme</li>
+        <li><div class="pf-check pfc-green">✓</div>Marker optimizasyonu</li>
+        <li><div class="pf-check pfc-green">✓</div>Email destek (48 saat)</div></li>
+      </ul>
+      <a href="#" class="btn-plan">14 Gün Dene</a>
+    </div>
+    <div class="price-card featured">
+      <div class="featured-badge">En Popüler</div>
+      <div class="plan-name">Studio</div>
+      <div class="price-amount">₺4.290</div>
+      <div class="price-period">/ay · yıllıkta %20 indirim</div>
+      <div class="price-desc" style="color:rgba(255,255,255,0.5)">Üretim grupları, kalıp ofisleri ve ekip çalışması için.</div>
+      <ul class="price-features">
+        <li><div class="pf-check pfc-blue">✓</div>Sınırsız proje</li>
+        <li><div class="pf-check pfc-blue">✓</div>Ekip üyeleri (5 kişi)</li>
+        <li><div class="pf-check pfc-blue">✓</div>Stripe matching marker</li>
+        <li><div class="pf-check pfc-blue">✓</div>Tech pack modülü</li>
+        <li><div class="pf-check pfc-blue">✓</div>Review workflow</li>
+        <li><div class="pf-check pfc-blue">✓</div>Chat destek (24 saat)</li>
+      </ul>
+      <a href="#" class="btn-plan btn-plan-accent">14 Gün Dene</a>
+    </div>
+    <div class="price-card">
+      <div class="plan-name">Enterprise</div>
+      <div class="price-amount">Özel</div>
+      <div class="price-period">Teklif alın</div>
+      <div class="price-desc">Fason firmalar, çok markalı gruplar ve PLM entegrasyonu için.</div>
+      <ul class="price-features">
+        <li><div class="pf-check pfc-green">✓</div>Sınırsız ekip</li>
+        <li><div class="pf-check pfc-green">✓</div>SSO + özel domain</li>
+        <li><div class="pf-check pfc-green">✓</div>API erişimi</li>
+        <li><div class="pf-check pfc-green">✓</div>PLM/ERP entegrasyon</li>
+        <li><div class="pf-check pfc-green">✓</div>Dedicated CSM</li>
+        <li><div class="pf-check pfc-green">✓</div>4 saat SLA</li>
+      </ul>
+      <a href="#" class="btn-plan">İletişime Geç</a>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="testimonials">
+  <div class="reveal" style="text-align:center">
+    <div class="section-label" style="display:flex;justify-content:center">Kullanıcı Yorumları</div>
+    <h2 class="section-title" style="margin:0 auto;text-align:center;margin-bottom:0">Üreticiler ne diyor?</h2>
+  </div>
+  <div class="testi-grid reveal">
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <p class="testi-text">"Eskiden bir modelistin 3-4 saatte hazırladığı kalıp taslağını AI-PatternWeb 40 saniyede çıkarıyor. Ölçü doğruluğu konusunda şüphecidim ama QA modülü gerçekten güven veriyor."</p>
+      <div class="testi-author">
+        <div class="testi-avatar ta1">AK</div>
+        <div>
+          <div class="testi-name">Ayşe K.</div>
+          <div class="testi-role">Kalıp Ofisi Müdürü, İstanbul</div>
+        </div>
+      </div>
+    </div>
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <p class="testi-text">"Fason işimizde beden serileme en çok zaman alan süreçti. Artık base bedenden 7 bedene saniyeler içinde geçiyoruz. Pastal fire oranımız %12'den %7'ye düştü."</p>
+      <div class="testi-author">
+        <div class="testi-avatar ta2">MT</div>
+        <div>
+          <div class="testi-name">Mehmet T.</div>
+          <div class="testi-role">Üretim Direktörü, Bursa</div>
+        </div>
+      </div>
+    </div>
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <p class="testi-text">"DXF export'ların Lectra'da sorunsuz açılması kritikti. Validation modülü sayesinde geçersiz dosya göndermiyoruz. Numune tekrar sayımız da azaldı."</p>
+      <div class="testi-author">
+        <div class="testi-avatar ta3">SY</div>
+        <div>
+          <div class="testi-name">Selin Y.</div>
+          <div class="testi-role">Teknik Tasarım Uzmanı, Ankara</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="cta-blob1"></div>
+  <div class="cta-blob2"></div>
+  <div class="cta-content">
+    <div class="cta-badge">
+      <span style="color:var(--accent3)">●</span>
+      14 gün ücretsiz · Kredi kartı yok
+    </div>
+    <h2 class="cta-title">Üretim güvenli kalıba<br>bugün geçin.</h2>
+    <p class="cta-sub">Binlerce konfeksiyoncu ve modelistle birlikte — fotoğraftan DXF'e, dakikalar içinde.</p>
+    <div class="cta-actions">
+      <a href="#pricing" class="btn-white">
+        Ücretsiz Başla
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+      <a href="#demo" class="btn-ghost">Demo İzle</a>
+    </div>
+    <div class="cta-note">Türkiye'de barındırılır · KVKK uyumlu · TSE standartları destekli</div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="logo" style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <span class="logo-dot"></span>
+        AI-PatternWeb
+      </div>
+      <p class="footer-desc">Fotoğraftan üretime hazır kalıba. Yapay zeka destekli, kural tabanlı, üretim güvenli pattern engineering platformu.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Ürün</h4>
+      <ul class="footer-links">
+        <li><a href="#">Özellikler</a></li>
+        <li><a href="#">Fiyatlar</a></li>
+        <li><a href="#">Güvenlik</a></li>
+        <li><a href="#">Yol Haritası</a></li>
+        <li><a href="#">API</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Şirket</h4>
+      <ul class="footer-links">
+        <li><a href="#">Hakkımızda</a></li>
+        <li><a href="#">Blog</a></li>
+        <li><a href="#">Kariyer</a></li>
+        <li><a href="#">İletişim</a></li>
+        <li><a href="#">Basın</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Destek</h4>
+      <ul class="footer-links">
+        <li><a href="#">Dokümantasyon</a></li>
+        <li><a href="#">Eğitim Videoları</a></li>
+        <li><a href="#">Topluluk Forum</a></li>
+        <li><a href="#">KVKK</a></li>
+        <li><a href="#">Kullanım Şartları</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 AI-PatternWeb. Tüm hakları saklıdır.</span>
+    <div class="footer-tags">
+      <span class="tag">KVKK Uyumlu</span>
+      <span class="tag">TSE Standartları</span>
+      <span class="tag">Türkiye'de Barındırılır</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Scroll reveal
+const observer = new IntersectionObserver(entries => {
+  entries.forEach((e,i) => {
+    if(e.isIntersecting){
+      setTimeout(()=>e.target.classList.add('visible'), i*80);
+    }
+  });
+},{threshold:0.1});
+document.querySelectorAll('.reveal').forEach(el=>observer.observe(el));
+
+// Nav scroll effect
+window.addEventListener('scroll',()=>{
+  document.querySelector('nav').style.borderBottomColor = window.scrollY > 10 ? 'rgba(13,13,13,0.12)' : 'transparent';
+});
+
+// Smooth stat counter
+function animateCount(el, end, suffix=''){
+  let start=0, dur=1800, step=dur/60;
+  const inc=end/60;
+  const timer=setInterval(()=>{
+    start=Math.min(start+inc, end);
+    el.textContent = (Number.isInteger(end)?Math.round(start):start.toFixed(1)) + suffix;
+    if(start>=end) clearInterval(timer);
+  }, step);
+}
+
+const statsObserver = new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      document.querySelector('.hero-stats') && [
+        [document.querySelectorAll('.stat-num')[0],'94','%'],
+        [document.querySelectorAll('.stat-num')[1],'12','x'],
+        [document.querySelectorAll('.stat-num')[2],'8','%'],
+      ].forEach(([el,val,suf])=>el && animateCount(el,+val,suf));
+      statsObserver.disconnect();
+    }
+  });
+},{threshold:0.5});
+const statsEl = document.querySelector('.hero-stats');
+if(statsEl) statsObserver.observe(statsEl);
+</script>
+</body>
+</html>

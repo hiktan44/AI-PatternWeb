@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+node_modules_new/
+node_modules_sym
+__pycache__/
+*.pyc
+.venv/
+venv/
+package-lock.json
+venv/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build
+.next/
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Docker volumes
+postgres_data/
+redis_data/
+
+# Uploads
+uploads/
+
+# Logs
+*.log
+logs/
+
+# Coverage
+coverage/
+htmlcov/
+.pytest_cache/

@@ -13,6 +13,12 @@ from app.api import auth, projects, patterns, health
 async def lifespan(application: FastAPI):
     """Uygulama başlangıç ve kapatma olayları"""
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    # Tabloları otomatik oluştur
+    from app.core.database import engine, Base
+    from app.models.user import User  # noqa: F401
+    from app.models.project import Project, ProjectFile  # noqa: F401
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
 
 

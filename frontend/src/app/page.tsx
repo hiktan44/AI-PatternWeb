@@ -35,7 +35,7 @@ export default function LandingPage() {
           <a href="#pricing">Fiyatlar</a>
           <a href="#demo">Demo</a>
         </div>
-        <a href="#pricing" className={s.navCta}>Ücretsiz Başla</a>
+        <a href="/login" className={s.navCta}>Ücretsiz Başla</a>
       </nav>
 
       {/* HERO */}
@@ -56,7 +56,7 @@ export default function LandingPage() {
             Görsel, eskiz veya ölçü tablosu yükleyin. Yapay zeka destekli, kural tabanlı sistemimiz sizi DXF export&apos;a kadar güvenle taşısın.
           </p>
           <div className={s.heroActions}>
-            <a href="#pricing" className={s.btnPrimary}>
+            <a href="/login" className={s.btnPrimary}>
               14 Gün Ücretsiz Dene
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </a>
@@ -269,7 +269,7 @@ export default function LandingPage() {
                 <li key={i}><div className={`${s.pfCheck} ${s.pfcGreen}`}>✓</div>{f}</li>
               ))}
             </ul>
-            <a href="#" className={s.btnPlan}>Başla</a>
+            <a href="/login" className={s.btnPlan}>Başla</a>
           </div>
 
           <div className={s.priceCard}>
@@ -282,7 +282,7 @@ export default function LandingPage() {
                 <li key={i}><div className={`${s.pfCheck} ${s.pfcGreen}`}>✓</div>{f}</li>
               ))}
             </ul>
-            <a href="#" className={s.btnPlan}>14 Gün Dene</a>
+            <a href="/login" className={s.btnPlan}>14 Gün Dene</a>
           </div>
 
           <div className={`${s.priceCard} ${s.priceCardFeatured}`}>
@@ -296,7 +296,7 @@ export default function LandingPage() {
                 <li key={i}><div className={`${s.pfCheck} ${s.pfcBlue}`}>✓</div>{f}</li>
               ))}
             </ul>
-            <a href="#" className={`${s.btnPlan} ${s.btnPlanAccent}`}>14 Gün Dene</a>
+            <a href="/login" className={`${s.btnPlan} ${s.btnPlanAccent}`}>14 Gün Dene</a>
           </div>
 
           <div className={s.priceCard}>
@@ -309,7 +309,7 @@ export default function LandingPage() {
                 <li key={i}><div className={`${s.pfCheck} ${s.pfcGreen}`}>✓</div>{f}</li>
               ))}
             </ul>
-            <a href="#" className={s.btnPlan}>İletişime Geç</a>
+            <a href="/login" className={s.btnPlan}>İletişime Geç</a>
           </div>
         </div>
       </section>
@@ -353,7 +353,7 @@ export default function LandingPage() {
           <h2 className={s.ctaTitle}>Üretim güvenli kalıba<br />bugün geçin.</h2>
           <p className={s.ctaSub}>Binlerce konfeksiyoncu ve modelistle birlikte — fotoğraftan DXF&apos;e, dakikalar içinde.</p>
           <div className={s.ctaActions}>
-            <a href="#pricing" className={s.btnWhite}>
+            <a href="/login" className={s.btnWhite}>
               Ücretsiz Başla
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </a>

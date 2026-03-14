@@ -75,3 +75,16 @@ export async function apiGetMe(token: string) {
   if (!res.ok) throw new Error("Oturum geçersiz");
   return res.json();
 }
+
+export async function apiGoogleLogin(googleToken: string, isAccessToken: boolean = false) {
+  const res = await fetch(`${API}/api/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: googleToken, is_access_token: isAccessToken }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || "Google ile giriş başarısız");
+  }
+  return res.json();
+}

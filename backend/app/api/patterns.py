@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.project import Project, ProjectFile
-from app.services.ai_analysis import analyze_image, validate_measurements
+from app.services.ai_analysis import analyze_image, validate_measurements, generate_pattern_from_image, generate_pattern_with_analysis
 from app.services.geometry import (
     get_base_pattern, grade_pattern, add_seam_allowance,
     validate_pattern, generate_marker_layout, export_to_dxf_data,
@@ -32,10 +32,11 @@ class AnalyzeRequest(BaseModel):
 
 class GradeRequest(BaseModel):
     project_id: str
-    category: str
+    category: str = ""
     base_size: str = "M"
     target_sizes: List[str] = ["S", "M", "L", "XL"]
     standard: str = "tse"
+    file_id: str = ""
 
 
 class SeamRequest(BaseModel):
@@ -68,8 +69,9 @@ async def list_categories():
             {"id": "dress", "name": "Düz Elbise", "icon": "👗", "available": True},
             {"id": "skirt", "name": "Etek", "icon": "🩳", "available": True},
             {"id": "pants", "name": "Basic Pantolon", "icon": "👖", "available": True},
-            {"id": "kids_top", "name": "Çocuk Basic Üst", "icon": "🧒", "available": False},
-            {"id": "outerwear", "name": "Basic Outerwear", "icon": "🧥", "available": False},
+            {"id": "blouse", "name": "Bluz", "icon": "👚", "available": True},
+            {"id": "jacket", "name": "Ceket", "icon": "🧥", "available": True},
+            {"id": "custom", "name": "Özel (AI ile)", "icon": "✨", "available": True},
         ]
     }
 
@@ -81,7 +83,6 @@ async def analyze_file(
     db: AsyncSession = Depends(get_db),
 ):
     """Yüklenen dosyayı AI ile analiz et"""
-    # Erişim kontrolü
     result = await db.execute(select(Project).where(Project.id == data.project_id, Project.user_id == user.id))
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Proje bulunamadı")
@@ -91,14 +92,11 @@ async def analyze_file(
     if not project_file:
         raise HTTPException(status_code=404, detail="Dosya bulunamadı")
 
-    # Kredi kontrolü
     if user.credits <= 0:
         raise HTTPException(status_code=402, detail="Yetersiz kredi")
 
-    # AI analiz
     analysis = await analyze_image(project_file.file_path)
 
-    # Sonucu kaydet
     project_file.analysis_result = analysis
     project_file.confidence_score = analysis.get("confidence", 0)
     user.credits -= 1
@@ -123,35 +121,87 @@ async def generate_pattern(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Kalıp şablonu oluştur ve seriyi hazırla"""
+    """AI ile resimden gerçek kalıp üret veya şablondan oluştur"""
     result = await db.execute(select(Project).where(Project.id == data.project_id, Project.user_id == user.id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Proje bulunamadı")
 
-    base_template = get_base_pattern(data.category)
+    # Dosya varsa AI ile resimden kalıp üret
+    ai_pattern = None
+    if data.file_id:
+        file_result = await db.execute(select(ProjectFile).where(ProjectFile.id == data.file_id))
+        project_file = file_result.scalar_one_or_none()
+
+        if project_file and os.path.exists(project_file.file_path):
+            # Önceki analiz sonuçları varsa kullan
+            if project_file.analysis_result:
+                ai_pattern = await generate_pattern_with_analysis(
+                    project_file.file_path, project_file.analysis_result
+                )
+            else:
+                ai_pattern = await generate_pattern_from_image(project_file.file_path)
+    else:
+        # file_id yoksa, proje dosyalarından ilk resmi bul
+        files_result = await db.execute(
+            select(ProjectFile).where(ProjectFile.project_id == data.project_id)
+        )
+        project_files = files_result.scalars().all()
+        for pf in project_files:
+            if pf.file_path and os.path.exists(pf.file_path):
+                ext = os.path.splitext(pf.file_path)[1].lower()
+                if ext in [".jpg", ".jpeg", ".png", ".webp"]:
+                    if pf.analysis_result:
+                        ai_pattern = await generate_pattern_with_analysis(
+                            pf.file_path, pf.analysis_result
+                        )
+                    else:
+                        ai_pattern = await generate_pattern_from_image(pf.file_path)
+                    break
+
+    # AI kalıp başarılıysa döndür
+    if ai_pattern and "pieces" in ai_pattern and not ai_pattern.get("error"):
+        project.category = ai_pattern.get("garment_type", data.category or "custom")
+        project.base_size = data.base_size
+        project.target_sizes = {"sizes": data.target_sizes, "standard": data.standard}
+        await db.commit()
+
+        return {
+            "ai_generated": True,
+            "garment_type": ai_pattern.get("garment_type", ""),
+            "pieces": ai_pattern.get("pieces", {}),
+            "total_piece_count": ai_pattern.get("total_piece_count", 0),
+            "assembly_order": ai_pattern.get("assembly_order", []),
+            "grading_notes": ai_pattern.get("grading_notes", ""),
+            "base_size": data.base_size,
+        }
+
+    # Fallback: Sabit şablonlardan oluştur
+    category = data.category or project.category or "tshirt"
+    base_template = get_base_pattern(category)
     graded_sizes = {}
 
     for size in data.target_sizes:
         graded_pieces = {}
         for piece_name, coords in base_template.items():
-            graded = grade_pattern(coords, data.category, size)
+            graded = grade_pattern(coords, category, size)
             graded_pieces[piece_name] = {
                 "coords": graded,
                 "validation": validate_pattern(graded),
             }
         graded_sizes[size] = graded_pieces
 
-    # Proje güncelle
     project.target_sizes = {"sizes": data.target_sizes, "standard": data.standard}
     project.base_size = data.base_size
-    project.category = data.category
+    project.category = category
     await db.commit()
 
     return {
+        "ai_generated": False,
+        "fallback_reason": "AI kalıp üretilemedi, sabit şablon kullanıldı",
         "base_template": {k: {"coords": v, "piece_count": 1} for k, v in base_template.items()},
         "graded_sizes": graded_sizes,
-        "grading_rules": GRADING_RULES.get(data.category),
+        "grading_rules": GRADING_RULES.get(category),
     }
 
 

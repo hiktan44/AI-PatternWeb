@@ -1,21 +1,42 @@
 """AI Analiz Servisi — Gemini API ile görsel analiz ve kalıp üretimi"""
 import json
+import logging
 import os
 from typing import Any
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
 try:
     import google.generativeai as genai
     GEMINI_AVAILABLE = True
+    logger.info("google.generativeai başarıyla import edildi")
 except ImportError:
     GEMINI_AVAILABLE = False
+    logger.warning("google.generativeai import BAŞARISIZ — pip install google-generativeai gerekli")
 
 
 def _configure_gemini():
-    if not GEMINI_AVAILABLE or not settings.GEMINI_API_KEY:
+    api_key = settings.GEMINI_API_KEY
+    logger.info(f"_configure_gemini: GEMINI_AVAILABLE={GEMINI_AVAILABLE}, API_KEY_SET={bool(api_key)}, KEY_LEN={len(api_key) if api_key else 0}")
+
+    if not GEMINI_AVAILABLE:
+        logger.error("Gemini kullanılamıyor: google.generativeai paketi yüklenmemiş")
         return None
-    genai.configure(api_key=settings.GEMINI_API_KEY)
+
+    if not api_key:
+        logger.error("Gemini kullanılamıyor: GEMINI_API_KEY boş veya tanımsız")
+        # Env'den doğrudan kontrol
+        env_key = os.environ.get("GEMINI_API_KEY", "")
+        logger.info(f"os.environ GEMINI_API_KEY: set={bool(env_key)}, len={len(env_key)}")
+        if env_key:
+            logger.info("os.environ'dan GEMINI_API_KEY bulundu, settings'de yok — env_key kullanılıyor")
+            api_key = env_key
+        else:
+            return None
+
+    genai.configure(api_key=api_key)
     return genai.GenerativeModel("gemini-2.0-flash")
 
 
@@ -101,31 +122,42 @@ async def analyze_image(file_path: str) -> dict[str, Any]:
 
 async def analyze_image_bytes(image_data: bytes, mime_type: str = "image/jpeg") -> dict[str, Any]:
     """Bytes verisinden AI ile analiz et (disk gerektirmez)"""
+    logger.info(f"analyze_image_bytes çağrıldı: data_size={len(image_data)}, mime={mime_type}")
     model = _configure_gemini()
     if not model:
+        logger.warning("analyze_image_bytes: model=None, demo analiz döndürülüyor")
         return _demo_analysis()
 
     try:
+        logger.info("Gemini API generate_content çağrılıyor...")
         response = model.generate_content([
             VISUAL_ANALYSIS_PROMPT,
             {"mime_type": mime_type, "data": image_data},
         ])
-        return _parse_json_response(response.text)
+        logger.info(f"Gemini yanıtı alındı: {len(response.text)} karakter")
+        result = _parse_json_response(response.text)
+        logger.info(f"Analiz başarılı: category={result.get('category', 'N/A')}")
+        return result
     except Exception as e:
+        logger.error(f"analyze_image_bytes hata: {e}", exc_info=True)
         return {"error": str(e), "confidence": 0, "demo_mode": True}
 
 
 async def generate_pattern_from_bytes(image_data: bytes, mime_type: str = "image/jpeg") -> dict[str, Any]:
     """Bytes verisinden gerçek kalıp parçaları üret (disk gerektirmez)"""
+    logger.info(f"generate_pattern_from_bytes çağrıldı: data_size={len(image_data)}, mime={mime_type}")
     model = _configure_gemini()
     if not model:
+        logger.warning("generate_pattern_from_bytes: model=None, demo kalıp döndürülüyor")
         return _demo_pattern()
 
     try:
+        logger.info("Gemini API kalıp üretimi çağrılıyor...")
         response = model.generate_content([
             PATTERN_GENERATION_PROMPT,
             {"mime_type": mime_type, "data": image_data},
         ])
+        logger.info(f"Gemini kalıp yanıtı alındı: {len(response.text)} karakter")
         result = _parse_json_response(response.text)
 
         if "pieces" in result:

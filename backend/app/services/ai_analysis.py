@@ -99,6 +99,47 @@ async def analyze_image(file_path: str) -> dict[str, Any]:
         return {"error": str(e), "confidence": 0, "demo_mode": True}
 
 
+async def analyze_image_bytes(image_data: bytes, mime_type: str = "image/jpeg") -> dict[str, Any]:
+    """Bytes verisinden AI ile analiz et (disk gerektirmez)"""
+    model = _configure_gemini()
+    if not model:
+        return _demo_analysis()
+
+    try:
+        response = model.generate_content([
+            VISUAL_ANALYSIS_PROMPT,
+            {"mime_type": mime_type, "data": image_data},
+        ])
+        return _parse_json_response(response.text)
+    except Exception as e:
+        return {"error": str(e), "confidence": 0, "demo_mode": True}
+
+
+async def generate_pattern_from_bytes(image_data: bytes, mime_type: str = "image/jpeg") -> dict[str, Any]:
+    """Bytes verisinden gerçek kalıp parçaları üret (disk gerektirmez)"""
+    model = _configure_gemini()
+    if not model:
+        return _demo_pattern()
+
+    try:
+        response = model.generate_content([
+            PATTERN_GENERATION_PROMPT,
+            {"mime_type": mime_type, "data": image_data},
+        ])
+        result = _parse_json_response(response.text)
+
+        if "pieces" in result:
+            for piece_data in result["pieces"].values():
+                if "coords" in piece_data and isinstance(piece_data["coords"], list):
+                    piece_data["coords"] = [
+                        tuple(p) if isinstance(p, list) else p
+                        for p in piece_data["coords"]
+                    ]
+        return result
+    except Exception as e:
+        return {"error": str(e), "demo_mode": True}
+
+
 async def generate_pattern_from_image(file_path: str) -> dict[str, Any]:
     """Görsel dosyasından gerçek kalıp parçaları üret"""
     model = _configure_gemini()

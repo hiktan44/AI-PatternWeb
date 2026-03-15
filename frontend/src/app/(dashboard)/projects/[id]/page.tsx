@@ -34,6 +34,9 @@ export default function ProjectDetailPage() {
   const [loaded, setLoaded] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Yüklenen dosya referansı (analiz/kalıp için tekrar gönderilecek)
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+
   // AI analiz sonuçları
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
@@ -60,6 +63,7 @@ export default function ProjectDetailPage() {
   const uploadFile = async (file: File) => {
     if (!token) return;
     setUploading(true);
+    setUploadedFile(file); // Dosya referansını sakla
     const fd = new FormData();
     fd.append("file", file);
     const res = await fetch(`${API}/api/projects/${id}/files`, {
@@ -84,23 +88,27 @@ export default function ProjectDetailPage() {
 
   // ====== AI ANALİZ ======
   const runAnalysis = async () => {
-    if (!token || files.length === 0) return;
+    if (!token) return;
     setAnalyzing(true);
     setAnalysisError("");
     setAnalysisResult(null);
 
-    const imageFile = files.find(f => f.file_type.includes("image"));
-    if (!imageFile) {
-      setAnalysisError("Analiz için bir görsel dosya yüklemelisiniz.");
+    // Yüklenen dosyayı bul
+    const fileToSend = uploadedFile;
+    if (!fileToSend) {
+      setAnalysisError("Analiz için önce bir görsel dosya yüklemelisiniz.");
       setAnalyzing(false);
       return;
     }
 
     try {
-      const res = await fetch(`${API}/api/patterns/analyze`, {
+      const fd = new FormData();
+      fd.append("file", fileToSend);
+
+      const res = await fetch(`${API}/api/patterns/analyze-upload`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ project_id: id, file_id: imageFile.id }),
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
       });
       if (!res.ok) {
         const err = await res.json();
@@ -108,8 +116,6 @@ export default function ProjectDetailPage() {
       }
       const data = await res.json();
       setAnalysisResult(data.analysis);
-      // Dosya listesini güncelle (confidence_score vs.)
-      load();
     } catch (err: any) {
       setAnalysisError(err.message || "Analiz sırasında hata oluştu");
     }
@@ -123,21 +129,33 @@ export default function ProjectDetailPage() {
     setPatternError("");
     setPatternResult(null);
 
-    const imageFile = files.find(f => f.file_type.includes("image"));
+    const fileToSend = uploadedFile;
 
     try {
-      const res = await fetch(`${API}/api/patterns/generate-pattern`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          project_id: id,
-          file_id: imageFile?.id || "",
-          category: project?.category || "custom",
-          base_size: "M",
-          target_sizes: ["S", "M", "L", "XL"],
-          standard: "tse",
-        }),
-      });
+      let res;
+      if (fileToSend) {
+        // Dosyayı doğrudan gönder
+        const fd = new FormData();
+        fd.append("file", fileToSend);
+        res = await fetch(`${API}/api/patterns/generate-pattern-upload`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+      } else {
+        // Fallback: eski yöntem
+        res = await fetch(`${API}/api/patterns/generate-pattern`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            project_id: id,
+            category: project?.category || "custom",
+            base_size: "M",
+            target_sizes: ["S", "M", "L", "XL"],
+            standard: "tse",
+          }),
+        });
+      }
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || "Kalıp oluşturma başarısız");

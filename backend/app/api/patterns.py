@@ -3,7 +3,7 @@ import os
 import uuid
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -14,7 +14,10 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.project import Project, ProjectFile
-from app.services.ai_analysis import analyze_image, validate_measurements, generate_pattern_from_image, generate_pattern_with_analysis
+from app.services.ai_analysis import (
+    analyze_image, validate_measurements, generate_pattern_from_image,
+    generate_pattern_with_analysis, analyze_image_bytes, generate_pattern_from_bytes,
+)
 from app.services.geometry import (
     get_base_pattern, grade_pattern, add_seam_allowance,
     validate_pattern, generate_marker_layout, export_to_dxf_data,
@@ -74,6 +77,44 @@ async def list_categories():
             {"id": "custom", "name": "Özel (AI ile)", "icon": "✨", "available": True},
         ]
     }
+
+
+@router.post("/analyze-upload")
+async def analyze_upload(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Dosyayı doğrudan yükleyerek AI ile analiz et (disk gerektirmez)"""
+    if user.credits <= 0:
+        raise HTTPException(status_code=402, detail="Yetersiz kredi")
+
+    content = await file.read()
+    ext = os.path.splitext(file.filename or ".jpg")[1].lower()
+    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+    mime_type = mime_map.get(ext, "image/jpeg")
+
+    analysis = await analyze_image_bytes(content, mime_type)
+
+    user.credits -= 1
+    await db.commit()
+
+    return {"analysis": analysis, "remaining_credits": user.credits}
+
+
+@router.post("/generate-pattern-upload")
+async def generate_pattern_upload(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    """Dosyayı doğrudan yükleyerek AI ile kalıp üret (disk gerektirmez)"""
+    content = await file.read()
+    ext = os.path.splitext(file.filename or ".jpg")[1].lower()
+    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+    mime_type = mime_map.get(ext, "image/jpeg")
+
+    result = await generate_pattern_from_bytes(content, mime_type)
+    return result
 
 
 @router.post("/analyze")

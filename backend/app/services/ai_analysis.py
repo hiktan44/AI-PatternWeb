@@ -37,7 +37,38 @@ def _configure_gemini():
             return None
 
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-2.0-flash")
+
+    # Varsayılan model — gemini-2.0-flash Google tarafından kaldırıldı
+    model_name = "gemini-2.0-flash-lite"
+    logger.info(f"Gemini model oluşturuluyor: {model_name}")
+    return genai.GenerativeModel(model_name)
+
+
+# Fallback model listesi — generate_content 404 verirse denenecek
+FALLBACK_MODELS = ["gemini-1.5-flash", "gemini-1.5-pro"]
+
+
+def _try_generate_with_fallback(primary_model, content_parts: list) -> Any:
+    """İlk modelle dene, 404 hatası alınırsa fallback modelleri dene"""
+    try:
+        response = primary_model.generate_content(content_parts)
+        return response
+    except Exception as e:
+        err_str = str(e)
+        if "404" in err_str or "no longer available" in err_str.lower():
+            logger.warning(f"Birincil model başarısız: {err_str[:100]}. Fallback deneniyor...")
+            for fallback_name in FALLBACK_MODELS:
+                try:
+                    logger.info(f"Fallback model deneniyor: {fallback_name}")
+                    fb_model = genai.GenerativeModel(fallback_name)
+                    response = fb_model.generate_content(content_parts)
+                    logger.info(f"Fallback model {fallback_name} başarılı!")
+                    return response
+                except Exception as fb_e:
+                    logger.warning(f"Fallback {fallback_name} de başarısız: {fb_e}")
+                    continue
+            raise  # Hiçbir model çalışmadıysa orijinal hatayı fırlat
+        raise  # 404 dışı hatalar için
 
 
 VISUAL_ANALYSIS_PROMPT = """Sen uzman bir konfeksiyon mühendisisin. Bu giysi görselini analiz et.
@@ -111,7 +142,7 @@ async def analyze_image(file_path: str) -> dict[str, Any]:
 
     try:
         image_data, mime_type = _read_image(file_path)
-        response = model.generate_content([
+        response = _try_generate_with_fallback(model, [
             VISUAL_ANALYSIS_PROMPT,
             {"mime_type": mime_type, "data": image_data},
         ])
@@ -130,7 +161,7 @@ async def analyze_image_bytes(image_data: bytes, mime_type: str = "image/jpeg") 
 
     try:
         logger.info("Gemini API generate_content çağrılıyor...")
-        response = model.generate_content([
+        response = _try_generate_with_fallback(model, [
             VISUAL_ANALYSIS_PROMPT,
             {"mime_type": mime_type, "data": image_data},
         ])
@@ -153,7 +184,7 @@ async def generate_pattern_from_bytes(image_data: bytes, mime_type: str = "image
 
     try:
         logger.info("Gemini API kalıp üretimi çağrılıyor...")
-        response = model.generate_content([
+        response = _try_generate_with_fallback(model, [
             PATTERN_GENERATION_PROMPT,
             {"mime_type": mime_type, "data": image_data},
         ])
@@ -180,7 +211,7 @@ async def generate_pattern_from_image(file_path: str) -> dict[str, Any]:
 
     try:
         image_data, mime_type = _read_image(file_path)
-        response = model.generate_content([
+        response = _try_generate_with_fallback(model, [
             PATTERN_GENERATION_PROMPT,
             {"mime_type": mime_type, "data": image_data},
         ])
@@ -225,7 +256,7 @@ async def generate_pattern_with_analysis(
 - Detaylar: {', '.join(analysis.get('details', []))}
 - Tahmini Parçalar: {', '.join(analysis.get('estimated_pieces', []))}
 """
-        response = model.generate_content([
+        response = _try_generate_with_fallback(model, [
             enhanced_prompt,
             {"mime_type": mime_type, "data": image_data},
         ])
@@ -256,7 +287,7 @@ async def validate_measurements(measurements: dict) -> dict[str, Any]:
 3. Beden aralıkları arasında orantısal artış var mı?
 JSON formatında:
 {"valid": true/false, "anomalies": [{"measurement": "...", "issue": "..."}], "confidence": 0.0-1.0, "suggestions": ["..."]}"""
-        response = model.generate_content([prompt, json.dumps(measurements, ensure_ascii=False)])
+        response = _try_generate_with_fallback(model, [prompt, json.dumps(measurements, ensure_ascii=False)])
         return _parse_json_response(response.text)
     except Exception as e:
         return {"valid": True, "anomalies": [], "confidence": 0, "error": str(e), "demo_mode": True}

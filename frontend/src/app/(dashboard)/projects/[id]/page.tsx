@@ -93,10 +93,15 @@ export default function ProjectDetailPage() {
     setAnalysisError("");
     setAnalysisResult(null);
 
-    // Yüklenen dosyayı bul
-    const fileToSend = uploadedFile;
+    // Yüklenen dosyayı bul — yoksa dosya seçiciyi aç
+    let fileToSend: File | Blob | null = uploadedFile;
     if (!fileToSend) {
-      setAnalysisError("Analiz için önce bir görsel dosya yüklemelisiniz.");
+      // Sayfa yenilenmişse uploadedFile kaybolur — dosya seçiciyi aç
+      if (files.length > 0) {
+        setAnalysisError("Sayfa yenilendiği için dosyayı tekrar seçmeniz gerekiyor. Lütfen dosya seçin.");
+      } else {
+        setAnalysisError("Analiz için önce bir görsel dosya yüklemelisiniz.");
+      }
       setAnalyzing(false);
       return;
     }

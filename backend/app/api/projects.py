@@ -139,3 +139,29 @@ async def list_files(project_id: str, user: User = Depends(get_current_user), db
     """Projedeki dosyaları listele"""
     result = await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id))
     return [ProjectFileResponse.model_validate(f) for f in result.scalars().all()]
+
+
+@router.get("/{project_id}/files/{file_id}/download")
+async def download_file(
+    project_id: str,
+    file_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Projedeki dosyayı indir"""
+    from fastapi.responses import FileResponse as FastFileResponse
+    result = await db.execute(
+        select(ProjectFile).where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
+    )
+    project_file = result.scalar_one_or_none()
+    if not project_file:
+        raise HTTPException(status_code=404, detail="Dosya bulunamadı")
+
+    if not os.path.exists(project_file.file_path):
+        raise HTTPException(status_code=404, detail="Dosya diskte bulunamadı")
+
+    return FastFileResponse(
+        project_file.file_path,
+        media_type=project_file.file_type,
+        filename=project_file.filename,
+    )

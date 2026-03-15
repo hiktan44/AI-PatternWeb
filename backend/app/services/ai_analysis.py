@@ -112,24 +112,42 @@ Aşağıdaki bilgileri JSON formatında çıkar:
 Eğer görselde birden fazla farklı giysi varsa multi_garment=true yap ve detected_garments listesinde her birini ayrı tanımla.
 Sadece JSON döndür, başka bir şey yazma."""
 
-PATTERN_GENERATION_PROMPT = """Sen dünya çapında deneyimli bir kalıp ustasısın (professional pattern maker).
-Bu giysi görselini inceleyerek GERÇEKÇİ konfeksiyon kalıp parçaları oluştur.
+PATTERN_GENERATION_PROMPT = """Sen dünya çapında deneyimli bir kalıp ustasısın. 71 ADET profesyonel kalıp çizimini inceleyerek öğrendiğin kurallara göre GERÇEKÇİ konfeksiyon kalıp parçaları oluştur.
 
-KRİTİK KURALLAR:
+MUTLAK KURALLAR:
 1. Koordinatlar mm cinsindendir. Beden M (42 EU) için oluştur.
-2. PARÇALAR DİKDÖRTGEN OLMAMALI — gerçek giysi kalıbı gibi kavisli hatlar, kol evi (armhole) eğrisi, yaka evi eğrisi, bel pensleri, etek genişlemesi gibi gerçekçi şekiller OLMALI.
-3. Her parçanın genişlik ve boy ölçülerini mm olarak belirt (measurements alanında).
-4. Pensler (darts) varsa, pens konumunu ve derinliğini belirt.
-5. İşaret noktalarını (notches) belirt — birleşim noktaları, omuz noktası, bel noktası.
-6. Dikiş payı DAHİL DEĞİL — sadece net kalıp çizgileri.
-7. Koordinatlar saat yönünde, kapalı kontür (ilk ve son nokta aynı).
-8. Her parça AYRI bir kalıp parçası olarak oluşturulacak — kendi bounding box'ında.
-9. Parça isimleri Türkçe olsun.
+2. PARÇALAR DİKDÖRTGEN OLMAMALI! Her parçanın kendi anatomik şekli vardır:
+   - Ön beden: Yaka evi → eğri, omuz → eğimli, kol evi → S-eğrisi, yan dikiş → kavisli
+   - Kol: Kol tepesi → belirgin yuvarlak kavis (8-12 ara nokta), alt → daralan
+   - Yaka: Oval/kavisli kenarlar, asla düz dikdörtgen değil
+   - Pantolon: Ağ eğrisi → J-şekli, bel hattı → kavisli
+3. Her parçada en az 12-20 koordinat noktası olmalı (eğri kısımlar birçok ara noktadan geçmeli).
+4. Her parçanın tüm ölçülerini mm olarak belirt (measurements alanında).
+5. Pensler, notch noktaları ve kumaş yönü belirt.
+6. Dikiş payı DAHİL DEĞİL — net kalıp çizgileri.
+7. Koordinatlar saat yönünde, kapalı kontür (ilk=son nokta).
+8. Parça isimleri Türkçe.
 
-PARÇA KOORDİNATLARI İÇİN ÖRNEK:
-- Ön beden: Omuz eğimi, kol evi eğrisi (S şeklinde kavisle), yan dikiş hattı, etek ucu, ön orta çizgisi
-- Kol: Kol tepesi (sleeve cap) yuvarlağı, yan dikişler, kol ucu genişleme
-- Yaka: Yaka evi eğrisi, dış kenar eğrisi
+REFERANS ÖLÇÜLER (M Beden — mm):
+Üst giysi: Omuz=150, Yarım göğüs=260, Yarım bel=230, Kol evi derinliği=220, Beden boyu=700, Yaka geniş=70, Yaka derin ön=120, Yaka derin arka=30
+Kol: Tepesi yükseklik=150, Uzunluk=600, Genişlik=180, Bilek=120
+Pantolon: Yarım bel=210, Yarım kalça=270, Ağ derinliği=280, Boy=1050, Paça=230
+Etek: Yarım bel=200, Yarım kalça=260, Boy=650
+
+GÖMLEK İÇİN ÖN BEDEN KOORDİNAT ÖRNEĞİ:
+[[0,0],[30,-5],[65,-15],[80,0],[100,15],[140,45],[155,50],[160,80],[155,130],[160,180],[170,210],[240,210],[235,280],[230,350],[235,420],[240,500],[250,600],[260,680],[0,680],[0,0]]
+
+GÖMLEK İÇİN KOL KOORDİNAT ÖRNEĞİ:
+[[0,150],[15,100],[30,60],[50,25],[70,8],[90,0],[110,8],[130,25],[150,60],[165,100],[180,150],[170,300],[165,450],[160,580],[155,600],[25,600],[20,580],[15,450],[10,300],[0,150]]
+
+GİYSİ TİPİNE GÖRE PARÇA LİSTESİ:
+- Gömlek: on_beden(2×), arka_beden(1×), kol(2×), yaka(2×), manset(2×), cep(1×) = 10-14 parça
+- Elbise: on_beden(2×), arka_beden(1×), on_etek(2×), arka_etek(1×), kol(2×) = 8-14 parça
+- Pantolon: on_parca(2×), arka_parca(2×), bel_kusagi(1×) = 6 parça
+- Ceket: on_beden(2×), arka_beden(2×), kol(2×), yaka(2×), cep(2×) = 12+ parça
+- Tişört: on_beden(1×), arka_beden(1×), kol(2×), yaka_biyesi(1×) = 5 parça
+- Etek: on_etek(1×), arka_etek(1×), bel_kusagi(1×) = 3-5 parça
+- Şort: on_parca(2×), arka_parca(2×), bel_kusagi(1×) = 5-7 parça
 
 JSON formatında döndür:
 {
@@ -137,70 +155,35 @@ JSON formatında döndür:
   "base_size": "M",
   "pieces": {
     "on_beden": {
-      "coords": [[x,y], [x,y], ...],
+      "coords": [[x,y], [x,y], ...EN AZ 15 NOKTA...],
       "grain_direction": "vertical",
-      "quantity": 1,
+      "quantity": 2,
       "mirror": false,
       "notes": "Ön orta: kıvırma/düğme patte",
       "measurements": {
         "width": 260,
         "height": 700,
-        "shoulder_width": 160,
+        "shoulder_width": 150,
         "armhole_depth": 220,
         "waist_width": 230,
-        "hem_width": 280
+        "hem_width": 260
       },
       "notches": [
-        {"position": [130, 0], "label": "Omuz noktası"},
-        {"position": [0, 380], "label": "Bel noktası"},
-        {"position": [260, 220], "label": "Kol evi noktası"}
+        {"position": [140, 45], "label": "Omuz noktası"},
+        {"position": [0, 350], "label": "Bel noktası"},
+        {"position": [240, 210], "label": "Kol evi noktası"}
       ],
       "darts": [
         {"position": [130, 350], "width": 25, "depth": 100, "type": "bel pensi"}
       ]
-    },
-    "arka_beden": {
-      "coords": [[x,y], [x,y], ...],
-      "grain_direction": "vertical",
-      "quantity": 1,
-      "mirror": false,
-      "notes": "Arka orta dikişi",
-      "measurements": {
-        "width": 260,
-        "height": 710,
-        "shoulder_width": 165,
-        "armhole_depth": 215
-      },
-      "notches": [],
-      "darts": []
-    },
-    "kol": {
-      "coords": [[x,y], [x,y], ...],
-      "grain_direction": "vertical",
-      "quantity": 2,
-      "mirror": true,
-      "notes": "Kol tepesi + kol ucu",
-      "measurements": {
-        "width": 180,
-        "height": 600,
-        "cap_height": 140,
-        "bicep_width": 170,
-        "wrist_width": 120
-      },
-      "notches": [
-        {"position": [90, 0], "label": "Kol tepesi"},
-        {"position": [0, 140], "label": "Ön kol noktası"},
-        {"position": [180, 140], "label": "Arka kol noktası"}
-      ],
-      "darts": []
     }
   },
-  "total_piece_count": 6,
-  "assembly_order": ["1. Bel pensleri dikilir", "2. Omuz dikişleri birleştirilir", "3. Kol evi hazırlanır", "4. Kol takılır", "5. Yan dikişler birleştirilir", "6. Etek ucu bastırılır"],
-  "grading_notes": "Beden artışı bilgileri"
+  "total_piece_count": 10,
+  "assembly_order": ["1. Pensler dikilir", "2. Omuz dikişleri", "3. Kol takılır", "4. Yan dikişler", "5. Etek ucu bastırılır"],
+  "grading_notes": "Beden artışı"
 }
 
-KRİTİK: Koordinatlar GERÇEKÇİ olmalı — dikdörtgen değil, konfeksiyon kalıbına özgü eğrilerle. Kol evi, yaka evi, kol tepesi gibi bölgeler mutlaka eğri olmalı.
+KRİTİK: Koordinatlar GERÇEKÇİ olmalı! Verdiğim örneklerdeki gibi eğrisel noktalar kullan. Dikdörtgen koordinat verme — kesinlikle REDDEDECEK şekilde tasarla.
 Sadece JSON döndür."""
 
 

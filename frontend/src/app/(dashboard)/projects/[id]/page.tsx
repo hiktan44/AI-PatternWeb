@@ -10,10 +10,12 @@ const API = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 interface ProjectFile { id: string; filename: string; file_type: string; file_size: number; confidence_score: number | null; analysis_result: Record<string, unknown> | null; }
 interface ProjectData { id: string; name: string; category: string; status: string; base_size: string | null; fabric_width: string | null; fabric_type: string | null; version: number; }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 const STEPS = [
   { id: "upload", label: "Görsel Yükle", icon: "📸" },
   { id: "analyze", label: "AI Analiz", icon: "🤖" },
-  { id: "measure", label: "Ölçü & Onay", icon: "📏" },
+  { id: "pattern", label: "Kalıp Oluştur", icon: "✂️" },
   { id: "edit", label: "Kalıp Editör", icon: "✏️" },
   { id: "seam", label: "Dikiş Payı", icon: "🧵" },
   { id: "grade", label: "Serileme", icon: "📐" },
@@ -31,6 +33,16 @@ export default function ProjectDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // AI analiz sonuçları
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [analysisError, setAnalysisError] = useState("");
+
+  // Kalıp oluşturma sonuçları
+  const [generating, setGenerating] = useState(false);
+  const [patternResult, setPatternResult] = useState<any>(null);
+  const [patternError, setPatternError] = useState("");
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -70,7 +82,139 @@ export default function ProjectDetailPage() {
     if (file) uploadFile(file);
   };
 
+  // ====== AI ANALİZ ======
+  const runAnalysis = async () => {
+    if (!token || files.length === 0) return;
+    setAnalyzing(true);
+    setAnalysisError("");
+    setAnalysisResult(null);
+
+    const imageFile = files.find(f => f.file_type.includes("image"));
+    if (!imageFile) {
+      setAnalysisError("Analiz için bir görsel dosya yüklemelisiniz.");
+      setAnalyzing(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API}/api/patterns/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ project_id: id, file_id: imageFile.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Analiz başarısız");
+      }
+      const data = await res.json();
+      setAnalysisResult(data.analysis);
+      // Dosya listesini güncelle (confidence_score vs.)
+      load();
+    } catch (err: any) {
+      setAnalysisError(err.message || "Analiz sırasında hata oluştu");
+    }
+    setAnalyzing(false);
+  };
+
+  // ====== KALIP OLUŞTUR ======
+  const generatePattern = async () => {
+    if (!token) return;
+    setGenerating(true);
+    setPatternError("");
+    setPatternResult(null);
+
+    const imageFile = files.find(f => f.file_type.includes("image"));
+
+    try {
+      const res = await fetch(`${API}/api/patterns/generate-pattern`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          project_id: id,
+          file_id: imageFile?.id || "",
+          category: project?.category || "custom",
+          base_size: "M",
+          target_sizes: ["S", "M", "L", "XL"],
+          standard: "tse",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Kalıp oluşturma başarısız");
+      }
+      const data = await res.json();
+      setPatternResult(data);
+    } catch (err: any) {
+      setPatternError(err.message || "Kalıp oluşturma sırasında hata oluştu");
+    }
+    setGenerating(false);
+  };
+
   const formatSize = (b: number) => b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${(b / 1024).toFixed(0)} KB`;
+
+  // Kalıp parçalarını SVG'ye çevir
+  const renderPatternSVG = () => {
+    if (!patternResult) return null;
+    const pieces = patternResult.pieces || patternResult.base_template;
+    if (!pieces) return null;
+
+    const colors = ["#1a56ff", "#00c896", "#ffb800", "#ff4d2e", "#9b59b6", "#e67e22"];
+    const entries = Object.entries(pieces);
+
+    // Tüm koordinatları topla, bounding box hesapla
+    let allCoords: number[][] = [];
+    entries.forEach(([, piece]: [string, any]) => {
+      const coords = piece.coords || (piece.coords ? piece.coords : []);
+      if (Array.isArray(coords)) allCoords = [...allCoords, ...coords.map((c: any) => Array.isArray(c) ? c : [c[0], c[1]])];
+    });
+
+    if (allCoords.length === 0) return null;
+
+    const xs = allCoords.map(c => c[0]);
+    const ys = allCoords.map(c => c[1]);
+    const minX = Math.min(...xs) - 20;
+    const minY = Math.min(...ys) - 20;
+    const maxX = Math.max(...xs) + 20;
+    const maxY = Math.max(...ys) + 20;
+    const w = maxX - minX;
+    const h = maxY - minY;
+
+    return (
+      <svg width="100%" height="100%" viewBox={`${minX} ${minY} ${w} ${h}`} style={{ maxHeight: 500 }}>
+        {/* Grid */}
+        <defs>
+          <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+            <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#e0e0e0" strokeWidth="0.5"/>
+          </pattern>
+        </defs>
+        <rect x={minX} y={minY} width={w} height={h} fill="url(#grid)"/>
+
+        {entries.map(([name, piece]: [string, any], idx) => {
+          const coords = piece.coords || [];
+          if (!Array.isArray(coords) || coords.length < 3) return null;
+          const points = coords.map((c: any) => `${c[0]},${c[1]}`).join(" ");
+          const color = colors[idx % colors.length];
+          // Merkez hesapla
+          const cx = coords.reduce((s: number, c: any) => s + c[0], 0) / coords.length;
+          const cy = coords.reduce((s: number, c: any) => s + c[1], 0) / coords.length;
+
+          return (
+            <g key={name}>
+              <polygon points={points} fill={`${color}15`} stroke={color} strokeWidth="2" strokeLinejoin="round"/>
+              <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" style={{ fontSize: Math.max(12, w/30), fill: color, fontWeight: 700 }}>
+                {name.replace(/_/g, " ").toUpperCase()}
+              </text>
+              {piece.quantity && piece.quantity > 1 && (
+                <text x={cx} y={cy + Math.max(14, w/25)} textAnchor="middle" style={{ fontSize: Math.max(10, w/40), fill: "#888" }}>
+                  x{piece.quantity}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    );
+  };
 
   if (!project) return <div className={styles.loadingScreen}><div className={styles.loadingSpinner} /><p>Proje yükleniyor...</p></div>;
 
@@ -89,7 +233,7 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* STEP PROGRESS */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 32 }}>
+      <div style={{ display: "flex", gap: 4, marginBottom: 32, overflowX: "auto" }}>
         {STEPS.map((step, i) => (
           <div
             key={step.id}
@@ -99,7 +243,7 @@ export default function ProjectDetailPage() {
               background: i <= currentStep ? (i === currentStep ? "rgba(26,86,255,0.1)" : "rgba(0,200,150,0.08)") : "var(--surface)",
               border: i === currentStep ? "1.5px solid var(--accent2)" : "1px solid var(--border)",
               cursor: i <= currentStep ? "pointer" : "default", transition: "all .2s",
-              opacity: i > currentStep ? 0.5 : 1,
+              opacity: i > currentStep ? 0.5 : 1, minWidth: 80,
             }}
           >
             <div style={{ fontSize: 20, marginBottom: 4 }}>{step.icon}</div>
@@ -108,7 +252,7 @@ export default function ProjectDetailPage() {
         ))}
       </div>
 
-      {/* STEP CONTENT */}
+      {/* === STEP 0: DOSYA YÜKLE === */}
       {currentStep === 0 && (
         <div>
           <div
@@ -152,90 +296,227 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
+      {/* === STEP 1: AI ANALİZ === */}
       {currentStep === 1 && (
-        <div style={{ textAlign: "center", padding: "60px 20px" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🤖</div>
-          <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 12 }}>AI Analiz</h3>
-          <p style={{ color: "var(--muted)", maxWidth: 480, margin: "0 auto 32px" }}>
-            Yüklediğiniz görseller AI tarafından analiz edilerek ürün kategorisi, parça yapısı ve ön kalıp taslağı oluşturulacak.
-          </p>
-          <button className="btn btn-accent btn-lg" onClick={() => setCurrentStep(2)}>
-            Analizi Başlat (1 Kredi)
-          </button>
+        <div>
+          <div style={{ textAlign: "center", padding: "40px 20px" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>🤖</div>
+            <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 12 }}>AI Analiz</h3>
+            <p style={{ color: "var(--muted)", maxWidth: 480, margin: "0 auto 32px" }}>
+              Yüklediğiniz görseller Gemini AI tarafından analiz edilerek ürün kategorisi, parça yapısı ve detayları belirlenecek.
+            </p>
+
+            {analysisError && (
+              <div style={{ background: "rgba(255,77,46,0.1)", color: "#ff4d2e", padding: "12px 20px", borderRadius: 12, marginBottom: 20, maxWidth: 500, margin: "0 auto 20px", fontSize: 14 }}>
+                ⚠️ {analysisError}
+              </div>
+            )}
+
+            {!analysisResult && (
+              <button
+                className="btn btn-accent btn-lg"
+                onClick={runAnalysis}
+                disabled={analyzing}
+                style={{ opacity: analyzing ? 0.7 : 1, cursor: analyzing ? "wait" : "pointer" }}
+              >
+                {analyzing ? "⏳ Analiz Ediliyor..." : "🤖 Analizi Başlat (1 Kredi)"}
+              </button>
+            )}
+          </div>
+
+          {/* Analiz Sonuçları */}
+          {analysisResult && (
+            <div style={{ maxWidth: 700, margin: "0 auto" }}>
+              <div style={{ padding: 24, background: "#fff", border: "2px solid rgba(0,200,150,0.3)", borderRadius: 16, marginBottom: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <h4 style={{ fontWeight: 700, margin: 0 }}>✅ Analiz Sonuçları</h4>
+                  {analysisResult.confidence && (
+                    <span style={{ background: "rgba(0,200,150,0.1)", color: "#009a6e", padding: "4px 12px", borderRadius: 20, fontWeight: 700, fontSize: 14 }}>
+                      %{(analysisResult.confidence * 100).toFixed(0)} Güven
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  {[
+                    { label: "Kategori", value: analysisResult.category },
+                    { label: "Giysi Tipi", value: analysisResult.garment_type },
+                    { label: "Siluet", value: analysisResult.silhouette },
+                    { label: "Yaka", value: analysisResult.collar_type },
+                    { label: "Kol", value: analysisResult.sleeve_type },
+                    { label: "Kapatma", value: analysisResult.closure_type },
+                    { label: "Bel", value: analysisResult.waist_type },
+                    { label: "Etek Ucu", value: analysisResult.hem_type },
+                    { label: "Boy", value: analysisResult.length },
+                    { label: "Kumaş Önerisi", value: analysisResult.fabric_suggestion },
+                  ].filter(r => r.value).map((row, i) => (
+                    <div key={i} style={{ padding: "10px 14px", background: "var(--surface)", borderRadius: 10, display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 13, color: "var(--muted)" }}>{row.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{String(row.value)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {analysisResult.details && analysisResult.details.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Detaylar:</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {analysisResult.details.map((d: string, i: number) => (
+                        <span key={i} className="badge badge-green">{d}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {analysisResult.estimated_pieces && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Tahmini Parçalar:</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {analysisResult.estimated_pieces.map((p: string, i: number) => (
+                        <span key={i} style={{ padding: "4px 10px", background: "rgba(26,86,255,0.08)", color: "var(--accent2)", borderRadius: 8, fontSize: 12, fontWeight: 600 }}>{p}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {analysisResult.construction_notes && (
+                  <div style={{ marginTop: 16, padding: "12px 14px", background: "rgba(255,184,0,0.06)", borderRadius: 10, fontSize: 13 }}>
+                    <strong>📝 Dikiş Notları:</strong> {analysisResult.construction_notes}
+                  </div>
+                )}
+
+                {analysisResult.demo_mode && (
+                  <div style={{ marginTop: 16, padding: "12px 14px", background: "rgba(255,77,46,0.08)", borderRadius: 10, fontSize: 13, color: "#ff4d2e" }}>
+                    ⚠️ Demo modu — GEMINI_API_KEY tanımlı değil. Gerçek analiz için API key gerekli.
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <button className="btn btn-outline" onClick={() => { setAnalysisResult(null); runAnalysis(); }}>🔄 Tekrar Analiz Et</button>
+                <button className="btn btn-accent" onClick={() => setCurrentStep(2)}>Kalıp Oluştur →</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
+      {/* === STEP 2: KALIP OLUŞTUR === */}
       {currentStep === 2 && (
         <div>
-          <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Ölçü Tablosu ve Onay</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-            <div className={styles.formGroup}>
-              <label>Baz Beden *</label>
-              <select className={styles.formInput}>
-                <option value="">Seçin...</option>
-                {["XS", "S", "M", "L", "XL", "XXL"].map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div className={styles.formGroup}>
-              <label>Kumaş Eni (cm)</label>
-              <input className={styles.formInput} type="number" placeholder="150" />
-            </div>
-            <div className={styles.formGroup}>
-              <label>Kumaş Tipi</label>
-              <select className={styles.formInput}>
-                <option value="">Seçin...</option>
-                <option value="dokuma">Dokuma</option>
-                <option value="orme">Örme</option>
-                <option value="denim">Denim</option>
-              </select>
-            </div>
-            <div className={styles.formGroup}>
-              <label>Kumaş Yönü</label>
-              <select className={styles.formInput}>
-                <option value="">Seçin...</option>
-                <option value="one_way">Tek Yön</option>
-                <option value="two_way">Çift Yön</option>
-                <option value="nap">Nap</option>
-              </select>
-            </div>
+          <div style={{ textAlign: "center", padding: "40px 20px" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>✂️</div>
+            <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 12 }}>AI Kalıp Üretimi</h3>
+            <p style={{ color: "var(--muted)", maxWidth: 520, margin: "0 auto 32px" }}>
+              Gemini AI, yüklediğiniz görseli ve analiz sonuçlarını kullanarak gerçekçi kalıp parçaları oluşturacak (Beden M / 42 EU).
+            </p>
+
+            {patternError && (
+              <div style={{ background: "rgba(255,77,46,0.1)", color: "#ff4d2e", padding: "12px 20px", borderRadius: 12, marginBottom: 20, maxWidth: 500, margin: "0 auto 20px", fontSize: 14 }}>
+                ⚠️ {patternError}
+              </div>
+            )}
+
+            {!patternResult && (
+              <button
+                className="btn btn-accent btn-lg"
+                onClick={generatePattern}
+                disabled={generating}
+                style={{ opacity: generating ? 0.7 : 1, cursor: generating ? "wait" : "pointer" }}
+              >
+                {generating ? "⏳ Kalıp Oluşturuluyor... (15-30 sn)" : "✂️ Kalıp Oluştur"}
+              </button>
+            )}
           </div>
 
-          <h4 style={{ fontWeight: 700, marginBottom: 12 }}>Ölçü Tablosu (cm)</h4>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, marginBottom: 24 }}>
-            <thead>
-              <tr style={{ borderBottom: "2px solid var(--border)" }}>
-                <th style={{ textAlign: "left", padding: "8px 12px" }}>Ölçü</th>
-                {["S", "M", "L", "XL"].map((s) => <th key={s} style={{ padding: "8px 12px" }}>{s}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { label: "Göğüs", vals: [96, 100, 104, 110] },
-                { label: "Bel", vals: [84, 88, 92, 98] },
-                { label: "Basen", vals: [100, 104, 108, 114] },
-                { label: "Omuz", vals: [44, 46, 48, 50] },
-                { label: "Kol Boyu", vals: [62, 63, 64, 65] },
-                { label: "Ön Boy", vals: [72, 74, 76, 78] },
-              ].map((row, ri) => (
-                <tr key={ri} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td style={{ padding: "8px 12px", fontWeight: 600 }}>{row.label}</td>
-                  {row.vals.map((v, vi) => (
-                    <td key={vi} style={{ padding: "8px 12px", textAlign: "center" }}>
-                      <input className={styles.formInput} style={{ width: 60, textAlign: "center", padding: "6px 8px" }} defaultValue={v} type="number" />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Kalıp Sonuçları */}
+          {patternResult && (
+            <div>
+              <div style={{ padding: 24, background: "#fff", border: "2px solid rgba(26,86,255,0.3)", borderRadius: 16, marginBottom: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <h4 style={{ fontWeight: 700, margin: 0 }}>
+                    {patternResult.ai_generated ? "✅ AI ile Oluşturuldu" : "📐 Şablon Kalıp"}
+                  </h4>
+                  {patternResult.garment_type && (
+                    <span style={{ background: "rgba(26,86,255,0.08)", color: "var(--accent2)", padding: "4px 12px", borderRadius: 20, fontWeight: 600, fontSize: 13 }}>
+                      {patternResult.garment_type}
+                    </span>
+                  )}
+                </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
-            <button className="btn btn-outline" onClick={() => setCurrentStep(1)}>← Geri</button>
-            <button className="btn btn-accent" onClick={() => setCurrentStep(3)}>Onayla ve Kalıba Geç →</button>
-          </div>
+                {patternResult.total_piece_count && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+                    <div style={{ padding: 12, background: "var(--surface)", borderRadius: 10, textAlign: "center" }}>
+                      <div style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Syne', sans-serif" }}>{patternResult.total_piece_count}</div>
+                      <div style={{ fontSize: 11, color: "var(--muted)" }}>Parça Sayısı</div>
+                    </div>
+                    <div style={{ padding: 12, background: "var(--surface)", borderRadius: 10, textAlign: "center" }}>
+                      <div style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Syne', sans-serif" }}>{patternResult.base_size || "M"}</div>
+                      <div style={{ fontSize: 11, color: "var(--muted)" }}>Baz Beden</div>
+                    </div>
+                    <div style={{ padding: 12, background: "var(--surface)", borderRadius: 10, textAlign: "center" }}>
+                      <div style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: patternResult.ai_generated ? "#00c896" : "#ffb800" }}>
+                        {patternResult.ai_generated ? "AI" : "TPL"}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--muted)" }}>Tür</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* SVG kalıp görseli */}
+                <div style={{ background: "#fafaf8", borderRadius: 12, padding: 20, minHeight: 300, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+                  {renderPatternSVG() || (
+                    <p style={{ color: "var(--muted)" }}>Kalıp verisi SVG olarak görüntülenemiyor.</p>
+                  )}
+                </div>
+
+                {/* Parça listesi */}
+                {patternResult.pieces && (
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 12 }}>Parçalar:</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      {Object.entries(patternResult.pieces).map(([name, piece]: [string, any]) => (
+                        <div key={name} style={{ padding: "10px 14px", background: "var(--surface)", borderRadius: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontWeight: 600, fontSize: 13 }}>{name.replace(/_/g, " ")}</span>
+                          <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                            {piece.quantity && `x${piece.quantity}`}
+                            {piece.grain_direction && ` · ${piece.grain_direction}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Montaj sırası */}
+                {patternResult.assembly_order && patternResult.assembly_order.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Montaj Sırası:</div>
+                    <div style={{ padding: "12px 14px", background: "rgba(0,200,150,0.04)", borderRadius: 10, fontSize: 13, lineHeight: 1.8 }}>
+                      {patternResult.assembly_order.map((line: string, i: number) => (
+                        <div key={i}>{line}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!patternResult.ai_generated && patternResult.fallback_reason && (
+                  <div style={{ marginTop: 16, padding: "12px 14px", background: "rgba(255,184,0,0.08)", borderRadius: 10, fontSize: 13, color: "#b38600" }}>
+                    ⚠️ {patternResult.fallback_reason}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <button className="btn btn-outline" onClick={() => { setPatternResult(null); generatePattern(); }}>🔄 Tekrar Oluştur</button>
+                <button className="btn btn-accent" onClick={() => setCurrentStep(3)}>Kalıp Editör →</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
+      {/* === STEP 3: KALIP EDİTÖR === */}
       {currentStep === 3 && (
         <div className={styles.editorLayout}>
           <div className={styles.canvasArea}>
@@ -244,36 +525,36 @@ export default function ProjectDetailPage() {
                 <button key={i} className="btn btn-sm btn-ghost">{t}</button>
               ))}
               <div style={{ flex: 1 }} />
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>2D Pattern Editör — Konva.js</span>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>2D Pattern Editör</span>
             </div>
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 500, background: "#fafaf8", position: "relative" }}>
               <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, #d4d4d4 1px, transparent 1px)", backgroundSize: "24px 24px", opacity: 0.5 }} />
-              <svg width="400" height="360" viewBox="0 0 400 360" style={{ position: "relative", zIndex: 1 }}>
-                <g><path d="M100,50 L125,38 L175,33 L225,33 L275,38 L300,50 L300,58 L275,65 L263,280 L137,280 L125,65 L100,58 Z" fill="rgba(26,86,255,0.06)" stroke="#1a56ff" strokeWidth="1.5" strokeLinejoin="round"/><text x="200" y="165" textAnchor="middle" style={{ fontSize: 12, fill: "#888" }}>ÖN BEDEN</text></g>
-                <g><path d="M35,75 L90,70 L100,165 L45,175 Z" fill="rgba(0,200,150,0.08)" stroke="#00c896" strokeWidth="1.5" strokeLinejoin="round"/><text x="65" y="125" textAnchor="middle" style={{ fontSize: 10, fill: "#888" }}>KOL</text></g>
-                <g><path d="M310,50 L330,38 L350,33 L375,33 L395,38 L400,60 L380,72 L370,280 L325,280 L318,72 Z" fill="rgba(255,184,0,0.07)" stroke="#ffb800" strokeWidth="1.5" strokeLinejoin="round"/><text x="358" y="165" textAnchor="middle" style={{ fontSize: 10, fill: "#888" }}>ARKA</text></g>
-                <line x1="200" y1="210" x2="200" y2="260" stroke="#888" strokeWidth="1"/><polygon points="200,207 197,213 203,213" fill="#888"/><polygon points="200,263 197,257 203,257" fill="#888"/>
-              </svg>
+              <div style={{ position: "relative", zIndex: 1, width: "90%", height: "90%" }}>
+                {patternResult ? renderPatternSVG() : (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>
+                    <p>Önce kalıp oluşturun (Step 2)</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <div className={styles.sidePanel}>
             <div className={styles.panelSection}>
               <div className={styles.panelTitle}>Parçalar</div>
-              {["Ön Beden", "Arka Beden", "Kol (x2)", "Yaka", "Manşet (x2)"].map((p, i) => (
-                <div key={i} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }} className={styles.projectCard}>
-                  <span>{p}</span>
-                  <span className="badge badge-green" style={{ fontSize: 10 }}>✓</span>
-                </div>
-              ))}
-            </div>
-            <div className={styles.panelSection}>
-              <div className={styles.panelTitle}>Confidence</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <div style={{ flex: 1, height: 8, background: "var(--surface)", borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{ width: "94%", height: "100%", background: "var(--accent3)", borderRadius: 4 }} />
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent3)" }}>94%</span>
-              </div>
+              {patternResult?.pieces ? (
+                Object.entries(patternResult.pieces).map(([name, piece]: [string, any], i: number) => (
+                  <div key={i} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, background: "var(--surface)" }}>
+                    <span>{name.replace(/_/g, " ")}</span>
+                    <span style={{ fontSize: 10, color: "#00c896" }}>✓ {piece.quantity && `x${piece.quantity}`}</span>
+                  </div>
+                ))
+              ) : (
+                ["Ön Beden", "Arka Beden", "Kol (x2)", "Yaka"].map((p, i) => (
+                  <div key={i} style={{ padding: "8px 12px", borderRadius: 8, fontSize: 13, marginBottom: 4, background: "var(--surface)", color: "var(--muted)" }}>
+                    {p}
+                  </div>
+                ))
+              )}
             </div>
             <div style={{ padding: 20 }}>
               <button className="btn btn-accent" style={{ width: "100%" }} onClick={() => setCurrentStep(4)}>Dikiş Payı →</button>
@@ -282,6 +563,7 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
+      {/* === STEP 4-7: Diğer adımlar (mevcut UI korunuyor) === */}
       {currentStep === 4 && (
         <div>
           <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Dikiş Payı ve Annotation</h3>
@@ -299,14 +581,6 @@ export default function ProjectDetailPage() {
                 <input className={styles.formInput} style={{ width: 70, textAlign: "center", padding: "6px 8px" }} defaultValue={s.value} />
               </div>
             ))}
-          </div>
-          <div style={{ padding: 20, background: "#fff", border: "1px solid var(--border)", borderRadius: 12, marginBottom: 24 }}>
-            <div style={{ fontWeight: 700, marginBottom: 12 }}>Annotation</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {["✓ Notch", "✓ Grainline", "✓ Drill Mark", "✓ Fold Mark", "✓ Parça Adı", "✓ Beden Etiketi"].map((a, i) => (
-                <span key={i} className="badge badge-green">{a}</span>
-              ))}
-            </div>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
             <button className="btn btn-outline" onClick={() => setCurrentStep(3)}>← Geri</button>
@@ -328,21 +602,6 @@ export default function ProjectDetailPage() {
               <select className={styles.formInput} defaultValue="tse"><option value="tse">TSE EN 13402</option><option value="eu">EU EN 13402</option><option value="astm">ASTM D5585</option></select>
             </div>
           </div>
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontWeight: 700, marginBottom: 12 }}>Hedef Bedenler</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {["XS", "S", "M", "L", "XL", "XXL", "3XL"].map((s) => (
-                <label key={s} style={{ padding: "8px 16px", border: "1.5px solid var(--border)", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                  <input type="checkbox" defaultChecked={["S", "M", "L", "XL"].includes(s)} /> {s}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div style={{ padding: 20, background: "#fff", border: "1px solid var(--border)", borderRadius: 12, marginBottom: 24, textAlign: "center" }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>📐</div>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Seri Önizleme</div>
-            <p style={{ color: "var(--muted)", fontSize: 14 }}>S, M, L, XL bedenleri oluşturulacak. Beden arası oran kontrolü yapılarak anormal sıçrama tespit edilecek.</p>
-          </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
             <button className="btn btn-outline" onClick={() => setCurrentStep(4)}>← Geri</button>
             <button className="btn btn-accent" onClick={() => setCurrentStep(6)}>Seriyi Oluştur & Pastal →</button>
@@ -353,23 +612,6 @@ export default function ProjectDetailPage() {
       {currentStep === 6 && (
         <div>
           <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Pastal / Marker Yerleşimi</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 24 }}>
-            <div className={styles.formGroup}><label>Kumaş Eni</label><input className={styles.formInput} defaultValue="150 cm" /></div>
-            <div className={styles.formGroup}><label>Serim Tipi</label><select className={styles.formInput}><option>Çift Kat</option><option>Tek Kat</option><option>Açık En</option></select></div>
-            <div className={styles.formGroup}><label>Kumaş Yönü</label><select className={styles.formInput}><option>Tek Yön</option><option>Çift Yön</option></select></div>
-          </div>
-          <div style={{ padding: 24, background: "#fff", border: "1px solid var(--border)", borderRadius: 12, marginBottom: 24 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-              <div style={{ fontWeight: 700 }}>Marker Sonucu</div>
-              <span className="badge badge-green">Optimum</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
-              <div><div style={{ fontSize: 11, color: "var(--muted)" }}>Fire Oranı</div><div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800, color: "var(--accent3)" }}>%7.4</div></div>
-              <div><div style={{ fontSize: 11, color: "var(--muted)" }}>Toplam Uzunluk</div><div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800 }}>4.2 m</div></div>
-              <div><div style={{ fontSize: 11, color: "var(--muted)" }}>Parça Sayısı</div><div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800 }}>22</div></div>
-              <div><div style={{ fontSize: 11, color: "var(--muted)" }}>Beden Dağılımı</div><div style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 800 }}>4</div></div>
-            </div>
-          </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
             <button className="btn btn-outline" onClick={() => setCurrentStep(5)}>← Geri</button>
             <button className="btn btn-accent" onClick={() => setCurrentStep(7)}>QA & Export →</button>
@@ -380,28 +622,6 @@ export default function ProjectDetailPage() {
       {currentStep === 7 && (
         <div>
           <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 20 }}>QA Validation & Export</h3>
-          <div style={{ padding: 24, background: "#fff", border: "1px solid var(--border)", borderRadius: 12, marginBottom: 24 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontWeight: 700 }}>Doğrulama Raporu</div>
-              <span className="badge badge-green" style={{ fontSize: 13 }}>✓ PASSED</span>
-            </div>
-            {[
-              { check: "Tüm parçalar kapalı contour", status: "pass" },
-              { check: "Self-intersection yok", status: "pass" },
-              { check: "Tüm parçalarda grainline var", status: "pass" },
-              { check: "Tüm parçalarda isim var", status: "pass" },
-              { check: "Dikiş payları tanımlı", status: "pass" },
-              { check: "Ölçüler tolerans içinde", status: "pass" },
-              { check: "Notch pozisyonları tutarlı", status: "pass" },
-              { check: "Beden arası oranlar mantıklı", status: "pass" },
-            ].map((c, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < 7 ? "1px solid var(--border)" : "none" }}>
-                <span style={{ color: c.status === "pass" ? "var(--accent3)" : "var(--accent1)", fontWeight: 700 }}>{c.status === "pass" ? "✓" : "✗"}</span>
-                <span style={{ fontSize: 14 }}>{c.check}</span>
-              </div>
-            ))}
-          </div>
-
           <h4 style={{ fontWeight: 700, marginBottom: 16 }}>Export Formatları</h4>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {[
@@ -409,7 +629,7 @@ export default function ProjectDetailPage() {
               { format: "PDF", icon: "📄", desc: "A4 tiled, gerçek ölçekli çıktı" },
               { format: "CSV", icon: "📊", desc: "Parça raporu ve ölçü tablosu" },
             ].map((e, i) => (
-              <div key={i} style={{ padding: 20, background: "#fff", border: "1px solid var(--border)", borderRadius: 12, textAlign: "center", cursor: "pointer", transition: "all .2s" }}>
+              <div key={i} style={{ padding: 20, background: "#fff", border: "1px solid var(--border)", borderRadius: 12, textAlign: "center" }}>
                 <div style={{ fontSize: 36, marginBottom: 8 }}>{e.icon}</div>
                 <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, marginBottom: 4 }}>{e.format} Export</div>
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>{e.desc}</div>

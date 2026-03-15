@@ -56,21 +56,39 @@ npm run dev
 
 ## 🔐 Güvenlik
 
-- JWT authentication (bcrypt hash)
-- Rate limiting hazır
-- CORS kısıtlı origin
-- Input validation (Pydantic)
-- Dosya tipi/boyut kontrolü
+- JWT authentication (bcrypt hash, otomatik expiration)
+- **Rate limiting:** 100 istek/15dk pencere (IP bazlı)
+- **Login brute-force koruması:** 5 başarısız deneme → 15dk kilitleme
+- **CORS kısıtlı origin** — `ALLOWED_ORIGINS` env'den okunur, `*` kullanılmaz
+- **Security headers:** X-Frame-Options, X-XSS-Protection, HSTS, Referrer-Policy
+- **Input validation:** UUID format kontrolü, email regex, şifre uzunluk kontrolü
+- **Global error handler:** Yakalanmamış hatalar loglanır, kullanıcıya minimal bilgi
+- **Dosya tipi/boyut kontrolü:** Whitelist + max MB limiti
+- **Request logging:** 1s+ süren yavaş istekler uyarı loglanır
 - KVKK uyumlu gizlilik politikası
 
 ## 🛠️ Tech Stack
 
 - **Frontend:** Next.js 16, TypeScript, Zustand, CSS Modules
 - **Backend:** FastAPI, SQLAlchemy (async), Alembic, Pydantic
-- **AI:** Google Gemini 2.0 Flash
+- **AI:** Gemini 3.1 Flash / Pro (fallback)
 - **Geometri:** Shapely, ezdxf
 - **DB:** PostgreSQL 15 + Redis 7
-- **Deploy:** Docker, Coolify
+- **Deploy:** Docker, Coolify (self-hosting)
+
+## 🔧 Environment Variables
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Detaylar için `backend/.env.example` dosyasına bakın.
+
+## 📊 Monitoring
+
+- **Health check:** `GET /health` → `{ status, timestamp, uptime }`
+- **Rate limit headers:** `X-RateLimit-Limit`, `X-RateLimit-Remaining`
+- **Slow request logging:** 1000ms+ → warning log
 
 ## 📄 Lisans
 

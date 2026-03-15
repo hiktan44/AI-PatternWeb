@@ -1,4 +1,7 @@
-"""Auth API — Kayıt, giriş, Google OAuth ve token yönetimi"""
+"""Auth API — Kayıt, giriş, Google OAuth ve token yönetimi (Güvenlik Kuralı Uygulanmış)"""
+import logging
+import re
+import time
 import uuid
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -15,7 +18,42 @@ from app.core.security import hash_password, verify_password, create_access_toke
 from app.models.user import User
 from app.schemas import RegisterRequest, LoginRequest, TokenResponse, UserResponse
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# ── Login Brute-force Koruması ──
+_login_attempts: dict[str, list[float]] = {}
+LOGIN_LIMIT_WINDOW = 15 * 60  # 15 dakika
+LOGIN_MAX_ATTEMPTS = 5  # 5 başarısız deneme
+
+_EMAIL_REGEX = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+
+def _check_login_rate(email: str):
+    now = time.time()
+    key = email.lower().strip()
+    if key in _login_attempts:
+        _login_attempts[key] = [t for t in _login_attempts[key] if now - t < LOGIN_LIMIT_WINDOW]
+    else:
+        _login_attempts[key] = []
+    if len(_login_attempts[key]) >= LOGIN_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Çok fazla başarısız giriş denemesi. 15 dakika sonra tekrar deneyin.")
+
+def _record_failed_login(email: str):
+    _login_attempts.setdefault(email.lower().strip(), []).append(time.time())
+
+def _validate_email(email: str) -> str:
+    email = email.strip().lower()
+    if not _EMAIL_REGEX.match(email):
+        raise HTTPException(status_code=400, detail="Geçersiz email formatı")
+    if len(email) > 254:
+        raise HTTPException(status_code=400, detail="Email çok uzun")
+    return email
+
+def _validate_password(password: str):
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Şifre en az 8 karakter olmalıdır")
+    if len(password) > 128:
+        raise HTTPException(status_code=400, detail="Şifre çok uzun")
 
 
 class GoogleTokenRequest(BaseModel):
@@ -26,12 +64,15 @@ class GoogleTokenRequest(BaseModel):
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
     """Yeni kullanıcı kaydı"""
-    existing = await db.execute(select(User).where(User.email == data.email))
+    email = _validate_email(data.email)
+    _validate_password(data.password)
+
+    existing = await db.execute(select(User).where(User.email == email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Bu email adresi zaten kayıtlı")
 
     user = User(
-        email=data.email,
+        email=email,
         name=data.name,
         password_hash=hash_password(data.password),
         trial_ends_at=datetime.now(timezone.utc) + timedelta(days=14),
@@ -47,10 +88,14 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     """Kullanıcı girişi"""
-    result = await db.execute(select(User).where(User.email == data.email))
+    email = _validate_email(data.email)
+    _check_login_rate(email)
+
+    result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(data.password, user.password_hash):
+        _record_failed_login(email)
         raise HTTPException(status_code=401, detail="Email veya şifre hatalı")
 
     if not user.is_active:

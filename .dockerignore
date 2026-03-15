@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+node_modules_new/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment — ASLA image'a dahil etme
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+.next/
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs & Data
+*.log
+logs/
+uploads/
+postgres_data/
+redis_data/
+
+# Test & Coverage
+coverage/
+htmlcov/
+.pytest_cache/
+.testsprite/
+
+# Docs
+*.md
+LICENSE

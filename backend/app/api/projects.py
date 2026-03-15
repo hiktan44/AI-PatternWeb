@@ -1,4 +1,5 @@
-"""Proje yönetimi API"""
+"""Proje yönetimi API — Input validation ile güvenli"""
+import logging
 import os
 import uuid
 from typing import List
@@ -14,7 +15,17 @@ from app.models.user import User
 from app.models.project import Project, ProjectFile, AuditLog
 from app.schemas import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectFileResponse
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _validate_uuid(value: str, name: str = "ID") -> str:
+    """UUID formatını doğrula — SQL Injection koruması"""
+    try:
+        uuid.UUID(value)
+        return value
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail=f"Geçersiz {name} formatı")
 
 
 @router.get("/", response_model=List[ProjectResponse])
@@ -49,6 +60,7 @@ async def create_project(data: ProjectCreate, user: User = Depends(get_current_u
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(project_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Proje detayını getir"""
+    _validate_uuid(project_id, "proje ID")
     result = await db.execute(select(Project).where(Project.id == project_id, Project.user_id == user.id))
     project = result.scalar_one_or_none()
     if not project:
@@ -58,6 +70,7 @@ async def get_project(project_id: str, user: User = Depends(get_current_user), d
 
 @router.put("/{project_id}", response_model=ProjectResponse)
 async def update_project(project_id: str, data: ProjectUpdate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    _validate_uuid(project_id, "proje ID")
     """Proje güncelle"""
     result = await db.execute(select(Project).where(Project.id == project_id, Project.user_id == user.id))
     project = result.scalar_one_or_none()
@@ -77,6 +90,7 @@ async def update_project(project_id: str, data: ProjectUpdate, user: User = Depe
 @router.delete("/{project_id}", status_code=204)
 async def delete_project(project_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Proje sil"""
+    _validate_uuid(project_id, "proje ID")
     result = await db.execute(select(Project).where(Project.id == project_id, Project.user_id == user.id))
     project = result.scalar_one_or_none()
     if not project:
@@ -95,6 +109,7 @@ async def upload_file(
     db: AsyncSession = Depends(get_db),
 ):
     """Projeye dosya yükle"""
+    _validate_uuid(project_id, "proje ID")
     # Proje erişim kontrolü
     result = await db.execute(select(Project).where(Project.id == project_id, Project.user_id == user.id))
     if not result.scalar_one_or_none():
@@ -137,6 +152,7 @@ async def upload_file(
 @router.get("/{project_id}/files", response_model=List[ProjectFileResponse])
 async def list_files(project_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Projedeki dosyaları listele"""
+    _validate_uuid(project_id, "proje ID")
     result = await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id))
     return [ProjectFileResponse.model_validate(f) for f in result.scalars().all()]
 
@@ -149,6 +165,8 @@ async def download_file(
     db: AsyncSession = Depends(get_db),
 ):
     """Projedeki dosyayı indir"""
+    _validate_uuid(project_id, "proje ID")
+    _validate_uuid(file_id, "dosya ID")
     from fastapi.responses import FileResponse as FastFileResponse
     result = await db.execute(
         select(ProjectFile).where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)

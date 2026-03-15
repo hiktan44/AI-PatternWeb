@@ -71,37 +71,67 @@ def _try_generate_with_fallback(primary_model, content_parts: list) -> Any:
         raise  # 404 dışı hatalar için
 
 
-VISUAL_ANALYSIS_PROMPT = """Sen uzman bir konfeksiyon mühendisisin. Bu giysi görselini analiz et.
+VISUAL_ANALYSIS_PROMPT = """Sen uzman bir konfeksiyon mühendisisin ve profesyonel kalıp ustasısın (pattern maker).
+Bu giysi görselini çok dikkatli analiz et.
+
+ÖNEMLİ: Görselde birden fazla giysi parçası (ör: ayrı bir etek, üst, mont) varsa her birini "detected_garments" listesinde ayrı ayrı tanımla.
+
 Aşağıdaki bilgileri JSON formatında çıkar:
 {
-  "category": "tshirt|shirt|dress|skirt|pants|outerwear|jacket|blouse|coat",
+  "detected_garments": [
+    {
+      "garment_id": 1,
+      "category": "tshirt|shirt|dress|skirt|pants|outerwear|jacket|blouse|coat|vest|shorts",
+      "garment_type": "kısa açıklama (ör: A-line midi elbise, slim fit gömlek)",
+      "confidence": 0.0-1.0,
+      "silhouette": "slim|regular|oversize|a-line|fitted|flared|straight",
+      "collar_type": "round|v-neck|button-down|stand|peter-pan|shawl|none",
+      "sleeve_type": "short|3quarter|long|sleeveless|puff|raglan|bell",
+      "closure_type": "none|front-button|back-zipper|side-zipper|pullover",
+      "waist_type": "natural|empire|drop|none",
+      "hem_type": "straight|curved|asymmetric|flared",
+      "length": "crop|waist|hip|knee|midi|maxi",
+      "details": ["pocket", "zipper", "button", "dart", "pleat", "ruffle", "collar_stand", "cuff"],
+      "estimated_pieces": ["on_beden", "arka_beden", "kol", "yaka", ...],
+      "fabric_suggestion": "Önerilen kumaş tipi"
+    }
+  ],
+  "multi_garment": true/false,
+  "total_garment_count": 1,
+  "construction_notes": "Genel dikiş ve montaj notları",
+  "category": "ilk giysi kategorisi (geriye uyumluluk)",
   "confidence": 0.0-1.0,
-  "garment_type": "kısa açıklama (ör: A-line midi elbise, slim fit gömlek)",
-  "silhouette": "slim|regular|oversize|a-line|fitted|flared|straight",
-  "collar_type": "round|v-neck|button-down|stand|peter-pan|shawl|none",
-  "sleeve_type": "short|3quarter|long|sleeveless|puff|raglan|bell",
-  "closure_type": "none|front-button|back-zipper|side-zipper|pullover",
-  "waist_type": "natural|empire|drop|none",
-  "hem_type": "straight|curved|asymmetric|flared",
-  "length": "crop|waist|hip|knee|midi|maxi",
-  "details": ["pocket", "zipper", "button", "dart", "pleat", "ruffle", "collar_stand", "cuff"],
-  "estimated_pieces": ["front_body", "back_body", "sleeve", "collar", ...],
-  "construction_notes": "Dikiş ve montaj notları",
-  "fabric_suggestion": "Önerilen kumaş tipi"
+  "garment_type": "ilk giysi açıklaması",
+  "silhouette": "ilk giysi silueti",
+  "collar_type": "ilk giysi yakası",
+  "sleeve_type": "ilk giysi kolu",
+  "details": [],
+  "estimated_pieces": []
 }
+
+Eğer görselde birden fazla farklı giysi varsa multi_garment=true yap ve detected_garments listesinde her birini ayrı tanımla.
 Sadece JSON döndür, başka bir şey yazma."""
 
-PATTERN_GENERATION_PROMPT = """Sen profesyonel bir kalıp ustasısın (pattern maker). Bu giysi görselini inceleyerek gerçek konfeksiyon kalıbı oluştur.
+PATTERN_GENERATION_PROMPT = """Sen dünya çapında deneyimli bir kalıp ustasısın (professional pattern maker).
+Bu giysi görselini inceleyerek GERÇEKÇİ konfeksiyon kalıp parçaları oluştur.
 
-ÖNEMLİ KURALLAR:
+KRİTİK KURALLAR:
 1. Koordinatlar mm cinsindendir. Beden M (42 EU) için oluştur.
-2. Her parça gerçekçi ölçülerde olmalı (ör: bir elbise ön beden genişliği ~22-28cm, boy ~90-110cm).
-3. Giysinin SİLUETİNE, YAKASINA, KOLUNA ve DETAYLARıNA uygun kalıp parçaları oluştur.
-4. Dikiş payı DAHİL DEĞİL — sadece net kalıp çizgileri.
-5. Koordinatlar saat yönünde, kapalı kontür (ilk ve son nokta aynı).
-6. Parça isimleri Türkçe veya İngilizce standart olsun.
+2. PARÇALAR DİKDÖRTGEN OLMAMALI — gerçek giysi kalıbı gibi kavisli hatlar, kol evi (armhole) eğrisi, yaka evi eğrisi, bel pensleri, etek genişlemesi gibi gerçekçi şekiller OLMALI.
+3. Her parçanın genişlik ve boy ölçülerini mm olarak belirt (measurements alanında).
+4. Pensler (darts) varsa, pens konumunu ve derinliğini belirt.
+5. İşaret noktalarını (notches) belirt — birleşim noktaları, omuz noktası, bel noktası.
+6. Dikiş payı DAHİL DEĞİL — sadece net kalıp çizgileri.
+7. Koordinatlar saat yönünde, kapalı kontür (ilk ve son nokta aynı).
+8. Her parça AYRI bir kalıp parçası olarak oluşturulacak — kendi bounding box'ında.
+9. Parça isimleri Türkçe olsun.
 
-Aşağıdaki JSON formatında döndür:
+PARÇA KOORDİNATLARI İÇİN ÖRNEK:
+- Ön beden: Omuz eğimi, kol evi eğrisi (S şeklinde kavisle), yan dikiş hattı, etek ucu, ön orta çizgisi
+- Kol: Kol tepesi (sleeve cap) yuvarlağı, yan dikişler, kol ucu genişleme
+- Yaka: Yaka evi eğrisi, dış kenar eğrisi
+
+JSON formatında döndür:
 {
   "garment_type": "Giysi açıklaması",
   "base_size": "M",
@@ -110,27 +140,67 @@ Aşağıdaki JSON formatında döndür:
       "coords": [[x,y], [x,y], ...],
       "grain_direction": "vertical",
       "quantity": 1,
-      "notes": "Ön orta: kıvırma/düğme patte"
+      "mirror": false,
+      "notes": "Ön orta: kıvırma/düğme patte",
+      "measurements": {
+        "width": 260,
+        "height": 700,
+        "shoulder_width": 160,
+        "armhole_depth": 220,
+        "waist_width": 230,
+        "hem_width": 280
+      },
+      "notches": [
+        {"position": [130, 0], "label": "Omuz noktası"},
+        {"position": [0, 380], "label": "Bel noktası"},
+        {"position": [260, 220], "label": "Kol evi noktası"}
+      ],
+      "darts": [
+        {"position": [130, 350], "width": 25, "depth": 100, "type": "bel pensi"}
+      ]
     },
     "arka_beden": {
       "coords": [[x,y], [x,y], ...],
       "grain_direction": "vertical",
       "quantity": 1,
-      "notes": "Arka orta dikişi"
+      "mirror": false,
+      "notes": "Arka orta dikişi",
+      "measurements": {
+        "width": 260,
+        "height": 710,
+        "shoulder_width": 165,
+        "armhole_depth": 215
+      },
+      "notches": [],
+      "darts": []
     },
     "kol": {
       "coords": [[x,y], [x,y], ...],
       "grain_direction": "vertical",
       "quantity": 2,
-      "notes": "Sağ ve sol kol"
+      "mirror": true,
+      "notes": "Kol tepesi + kol ucu",
+      "measurements": {
+        "width": 180,
+        "height": 600,
+        "cap_height": 140,
+        "bicep_width": 170,
+        "wrist_width": 120
+      },
+      "notches": [
+        {"position": [90, 0], "label": "Kol tepesi"},
+        {"position": [0, 140], "label": "Ön kol noktası"},
+        {"position": [180, 140], "label": "Arka kol noktası"}
+      ],
+      "darts": []
     }
   },
   "total_piece_count": 6,
-  "assembly_order": ["1. Önce pens/dart dikişleri", "2. Omuz dikişleri", ...],
+  "assembly_order": ["1. Bel pensleri dikilir", "2. Omuz dikişleri birleştirilir", "3. Kol evi hazırlanır", "4. Kol takılır", "5. Yan dikişler birleştirilir", "6. Etek ucu bastırılır"],
   "grading_notes": "Beden artışı bilgileri"
 }
 
-GERÇEK ÖLÇÜLERLE ve giysinin görselindeki detaylara UYGUN kalıp parçaları oluştur.
+KRİTİK: Koordinatlar GERÇEKÇİ olmalı — dikdörtgen değil, konfeksiyon kalıbına özgü eğrilerle. Kol evi, yaka evi, kol tepesi gibi bölgeler mutlaka eğri olmalı.
 Sadece JSON döndür."""
 
 

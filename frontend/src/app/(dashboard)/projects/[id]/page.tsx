@@ -47,6 +47,12 @@ export default function ProjectDetailPage() {
   const [patternResult, setPatternResult] = useState<any>(null);
   const [patternError, setPatternError] = useState("");
 
+  // Parça seçimi & editör
+  const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
+
+  // Çoklu giysi tespiti
+  const [multiGarmentChoice, setMultiGarmentChoice] = useState<string | null>(null); // null = henüz seçilmedi, "all" = hepsi, garment_id = tek
+
   const load = useCallback(async () => {
     if (!token) return;
     const [pRes, fRes] = await Promise.all([
@@ -175,19 +181,24 @@ export default function ProjectDetailPage() {
 
   const formatSize = (b: number) => b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${(b / 1024).toFixed(0)} KB`;
 
-  // Kalıp parçalarını SVG'ye çevir
-  const renderPatternSVG = () => {
+  // Kalıp parçalarını SVG'ye çevir — ölçüler, pensler ve notch noktaları ile
+  const renderPatternSVG = (singlePieceName?: string) => {
     if (!patternResult) return null;
     const pieces = patternResult.pieces || patternResult.base_template;
     if (!pieces) return null;
 
-    const colors = ["#1a56ff", "#00c896", "#ffb800", "#ff4d2e", "#9b59b6", "#e67e22"];
-    const entries = Object.entries(pieces);
+    const colors = ["#1a56ff", "#00c896", "#ffb800", "#ff4d2e", "#9b59b6", "#e67e22", "#3498db", "#e74c3c"];
+    let entries = Object.entries(pieces);
+
+    // Tek parça gösterim modu
+    if (singlePieceName) {
+      entries = entries.filter(([name]) => name === singlePieceName);
+    }
 
     // Tüm koordinatları topla, bounding box hesapla
     let allCoords: number[][] = [];
     entries.forEach(([, piece]: [string, any]) => {
-      const coords = piece.coords || (piece.coords ? piece.coords : []);
+      const coords = piece.coords || [];
       if (Array.isArray(coords)) allCoords = [...allCoords, ...coords.map((c: any) => Array.isArray(c) ? c : [c[0], c[1]])];
     });
 
@@ -195,20 +206,24 @@ export default function ProjectDetailPage() {
 
     const xs = allCoords.map(c => c[0]);
     const ys = allCoords.map(c => c[1]);
-    const minX = Math.min(...xs) - 20;
-    const minY = Math.min(...ys) - 20;
-    const maxX = Math.max(...xs) + 20;
-    const maxY = Math.max(...ys) + 20;
+    const minX = Math.min(...xs) - 40;
+    const minY = Math.min(...ys) - 40;
+    const maxX = Math.max(...xs) + 40;
+    const maxY = Math.max(...ys) + 40;
     const w = maxX - minX;
     const h = maxY - minY;
+    const fontSize = Math.max(10, Math.min(16, w / 40));
 
     return (
-      <svg width="100%" height="100%" viewBox={`${minX} ${minY} ${w} ${h}`} style={{ maxHeight: 500 }}>
+      <svg width="100%" height="100%" viewBox={`${minX} ${minY} ${w} ${h}`} style={{ maxHeight: singlePieceName ? 600 : 500 }} id="pattern-svg">
         {/* Grid */}
         <defs>
           <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
             <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#e0e0e0" strokeWidth="0.5"/>
           </pattern>
+          <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="3" refY="2" orient="auto">
+            <polygon points="0 0, 6 2, 0 4" fill="#666" />
+          </marker>
         </defs>
         <rect x={minX} y={minY} width={w} height={h} fill="url(#grid)"/>
 
@@ -217,26 +232,137 @@ export default function ProjectDetailPage() {
           if (!Array.isArray(coords) || coords.length < 3) return null;
           const points = coords.map((c: any) => `${c[0]},${c[1]}`).join(" ");
           const color = colors[idx % colors.length];
+          const isSelected = selectedPiece === name;
+
           // Merkez hesapla
           const cx = coords.reduce((s: number, c: any) => s + c[0], 0) / coords.length;
           const cy = coords.reduce((s: number, c: any) => s + c[1], 0) / coords.length;
 
+          // Bounding box
+          const pxs = coords.map((c: any) => c[0]);
+          const pys = coords.map((c: any) => c[1]);
+          const pMinX = Math.min(...pxs);
+          const pMaxX = Math.max(...pxs);
+          const pMinY = Math.min(...pys);
+          const pMaxY = Math.max(...pys);
+          const pw = pMaxX - pMinX;
+          const ph = pMaxY - pMinY;
+
           return (
-            <g key={name}>
-              <polygon points={points} fill={`${color}15`} stroke={color} strokeWidth="2" strokeLinejoin="round"/>
-              <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" style={{ fontSize: Math.max(12, w/30), fill: color, fontWeight: 700 }}>
+            <g key={name} onClick={() => setSelectedPiece(isSelected ? null : name)} style={{ cursor: "pointer" }}>
+              {/* Parça dolgusu */}
+              <polygon
+                points={points}
+                fill={isSelected ? `${color}30` : `${color}10`}
+                stroke={color}
+                strokeWidth={isSelected ? 3 : 1.5}
+                strokeLinejoin="round"
+              />
+
+              {/* Parça adı */}
+              <text x={cx} y={cy - fontSize} textAnchor="middle" dominantBaseline="central"
+                style={{ fontSize: fontSize * 1.2, fill: color, fontWeight: 700 }}>
                 {name.replace(/_/g, " ").toUpperCase()}
               </text>
+
+              {/* Adet bilgisi */}
               {piece.quantity && piece.quantity > 1 && (
-                <text x={cx} y={cy + Math.max(14, w/25)} textAnchor="middle" style={{ fontSize: Math.max(10, w/40), fill: "#888" }}>
-                  x{piece.quantity}
+                <text x={cx} y={cy + fontSize * 0.5} textAnchor="middle"
+                  style={{ fontSize: fontSize * 0.9, fill: "#888" }}>
+                  ×{piece.quantity}
                 </text>
+              )}
+
+              {/* Ölçü çizgileri — genişlik */}
+              {piece.measurements && (
+                <>
+                  {/* Genişlik ölçüsü (alt) */}
+                  <line x1={pMinX} y1={pMaxY + 15} x2={pMaxX} y2={pMaxY + 15} stroke="#999" strokeWidth="0.8" markerEnd="url(#arrowhead)" markerStart="url(#arrowhead)" />
+                  <text x={(pMinX + pMaxX) / 2} y={pMaxY + 28} textAnchor="middle"
+                    style={{ fontSize: fontSize * 0.75, fill: "#666" }}>
+                    {piece.measurements.width ? `${(piece.measurements.width / 10).toFixed(1)} cm` : `${(pw / 10).toFixed(1)} cm`}
+                  </text>
+
+                  {/* Yükseklik ölçüsü (sağ) */}
+                  <line x1={pMaxX + 15} y1={pMinY} x2={pMaxX + 15} y2={pMaxY} stroke="#999" strokeWidth="0.8" markerEnd="url(#arrowhead)" markerStart="url(#arrowhead)" />
+                  <text x={pMaxX + 22} y={(pMinY + pMaxY) / 2} textAnchor="start" dominantBaseline="central"
+                    style={{ fontSize: fontSize * 0.75, fill: "#666", writingMode: "vertical-rl" as any }}>
+                    {piece.measurements.height ? `${(piece.measurements.height / 10).toFixed(1)} cm` : `${(ph / 10).toFixed(1)} cm`}
+                  </text>
+                </>
+              )}
+
+              {/* Pensler */}
+              {piece.darts && piece.darts.map((dart: any, di: number) => {
+                const dp = dart.position || [cx, cy];
+                const dw = dart.width || 20;
+                const dd = dart.depth || 80;
+                return (
+                  <g key={`dart-${di}`}>
+                    <line x1={dp[0] - dw / 2} y1={dp[1]} x2={dp[0]} y2={dp[1] - dd} stroke="#ff6b6b" strokeWidth="1" strokeDasharray="4 2" />
+                    <line x1={dp[0] + dw / 2} y1={dp[1]} x2={dp[0]} y2={dp[1] - dd} stroke="#ff6b6b" strokeWidth="1" strokeDasharray="4 2" />
+                    <text x={dp[0]} y={dp[1] + fontSize * 0.8} textAnchor="middle"
+                      style={{ fontSize: fontSize * 0.6, fill: "#ff6b6b" }}>
+                      {dart.type || "pens"}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* İşaret noktaları (notches) */}
+              {piece.notches && piece.notches.map((notch: any, ni: number) => {
+                const np = notch.position || [0, 0];
+                return (
+                  <g key={`notch-${ni}`}>
+                    <circle cx={np[0]} cy={np[1]} r={3} fill="#e74c3c" stroke="#fff" strokeWidth="1" />
+                    <text x={np[0] + 6} y={np[1] - 6} style={{ fontSize: fontSize * 0.55, fill: "#e74c3c" }}>
+                      {notch.label}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Kumaş yönü oku */}
+              {piece.grain_direction === "vertical" && (
+                <g>
+                  <line x1={cx} y1={pMinY + 15} x2={cx} y2={pMaxY - 15} stroke={color} strokeWidth="0.8" strokeDasharray="6 3" opacity="0.4" />
+                  <text x={cx + 8} y={pMinY + 25} style={{ fontSize: fontSize * 0.5, fill: color, opacity: 0.5 }}>↕ kumaş yönü</text>
+                </g>
               )}
             </g>
           );
         })}
       </svg>
     );
+  };
+
+  // SVG Export
+  const exportPatternSVG = () => {
+    const svgEl = document.getElementById("pattern-svg");
+    if (!svgEl) return;
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `kalip-${project?.name || "pattern"}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // PDF Export (SVG tabanlı)
+  const exportPatternPDF = () => {
+    const svgEl = document.getElementById("pattern-svg");
+    if (!svgEl) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html><head><title>Kalıp — ${project?.name || "Pattern"}</title>
+      <style>@page{size:A0 landscape;margin:10mm}body{margin:0;display:flex;justify-content:center;align-items:center;height:100vh}</style>
+      </head><body>${svgEl.outerHTML}</body></html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
   };
 
   if (!project) return <div className={styles.loadingScreen}><div className={styles.loadingSpinner} /><p>Proje yükleniyor...</p></div>;
@@ -410,7 +536,45 @@ export default function ProjectDetailPage() {
 
                 {analysisResult.demo_mode && (
                   <div style={{ marginTop: 16, padding: "12px 14px", background: "rgba(255,77,46,0.08)", borderRadius: 10, fontSize: 13, color: "#ff4d2e" }}>
-                    ⚠️ Demo modu — GEMINI_API_KEY tanımlı değil. Gerçek analiz için API key gerekli.
+                    ⚠️ Demo modu — {analysisResult.error || "GEMINI_API_KEY tanımlı değil. Gerçek analiz için API key gerekli."}
+                  </div>
+                )}
+
+                {/* Çoklu giysi tespiti */}
+                {analysisResult.multi_garment && analysisResult.detected_garments && analysisResult.detected_garments.length > 1 && (
+                  <div style={{ marginTop: 20, padding: 20, background: "rgba(26,86,255,0.04)", border: "2px solid rgba(26,86,255,0.2)", borderRadius: 14 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 15 }}>
+                      👔 {analysisResult.detected_garments.length} farklı giysi tespit edildi — hangisi için kalıp oluşturulsun?
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+                      {analysisResult.detected_garments.map((g: any) => (
+                        <button
+                          key={g.garment_id}
+                          onClick={() => setMultiGarmentChoice(String(g.garment_id))}
+                          style={{
+                            padding: "12px 16px", borderRadius: 12, border: multiGarmentChoice === String(g.garment_id) ? "2px solid var(--accent2)" : "1px solid var(--border)",
+                            background: multiGarmentChoice === String(g.garment_id) ? "rgba(26,86,255,0.08)" : "#fff",
+                            cursor: "pointer", textAlign: "left"
+                          }}
+                        >
+                          <div style={{ fontWeight: 700, fontSize: 14 }}>{g.garment_type}</div>
+                          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+                            {g.category} · {g.estimated_pieces?.length || 0} parça
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setMultiGarmentChoice("all")}
+                      style={{
+                        width: "100%", padding: "12px 16px", borderRadius: 12,
+                        border: multiGarmentChoice === "all" ? "2px solid #00c896" : "1px solid var(--border)",
+                        background: multiGarmentChoice === "all" ? "rgba(0,200,150,0.08)" : "#fff",
+                        cursor: "pointer", fontWeight: 700, fontSize: 14
+                      }}
+                    >
+                      🎯 HEPSİ — Her giysi için ayrı kalıp oluştur
+                    </button>
                   </div>
                 )}
               </div>
@@ -458,13 +622,17 @@ export default function ProjectDetailPage() {
               <div style={{ padding: 24, background: "#fff", border: "2px solid rgba(26,86,255,0.3)", borderRadius: 16, marginBottom: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <h4 style={{ fontWeight: 700, margin: 0 }}>
-                    {patternResult.ai_generated ? "✅ AI ile Oluşturuldu" : "📐 Şablon Kalıp"}
+                    {patternResult.ai_generated !== false ? "✅ AI ile Oluşturuldu" : "📐 Şablon Kalıp"}
                   </h4>
-                  {patternResult.garment_type && (
-                    <span style={{ background: "rgba(26,86,255,0.08)", color: "var(--accent2)", padding: "4px 12px", borderRadius: 20, fontWeight: 600, fontSize: 13 }}>
-                      {patternResult.garment_type}
-                    </span>
-                  )}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn btn-sm btn-ghost" onClick={exportPatternSVG}>📥 SVG</button>
+                    <button className="btn btn-sm btn-ghost" onClick={exportPatternPDF}>📄 PDF</button>
+                    {patternResult.garment_type && (
+                      <span style={{ background: "rgba(26,86,255,0.08)", color: "var(--accent2)", padding: "4px 12px", borderRadius: 20, fontWeight: 600, fontSize: 13 }}>
+                        {patternResult.garment_type}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {patternResult.total_piece_count && (
@@ -478,32 +646,125 @@ export default function ProjectDetailPage() {
                       <div style={{ fontSize: 11, color: "var(--muted)" }}>Baz Beden</div>
                     </div>
                     <div style={{ padding: 12, background: "var(--surface)", borderRadius: 10, textAlign: "center" }}>
-                      <div style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: patternResult.ai_generated ? "#00c896" : "#ffb800" }}>
-                        {patternResult.ai_generated ? "AI" : "TPL"}
-                      </div>
+                      <div style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: "#00c896" }}>AI</div>
                       <div style={{ fontSize: 11, color: "var(--muted)" }}>Tür</div>
                     </div>
                   </div>
                 )}
 
+                {/* Parça sekme çubuğu */}
+                {patternResult.pieces && (
+                  <div style={{ display: "flex", gap: 4, overflowX: "auto", marginBottom: 16, padding: "4px 0" }}>
+                    <button
+                      onClick={() => setSelectedPiece(null)}
+                      style={{
+                        padding: "8px 14px", borderRadius: 10, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
+                        border: !selectedPiece ? "2px solid var(--accent2)" : "1px solid var(--border)",
+                        background: !selectedPiece ? "rgba(26,86,255,0.08)" : "#fff",
+                        cursor: "pointer"
+                      }}
+                    >
+                      📐 Tümü
+                    </button>
+                    {Object.entries(patternResult.pieces).map(([name, piece]: [string, any]) => (
+                      <button
+                        key={name}
+                        onClick={() => setSelectedPiece(name)}
+                        style={{
+                          padding: "8px 14px", borderRadius: 10, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
+                          border: selectedPiece === name ? "2px solid var(--accent2)" : "1px solid var(--border)",
+                          background: selectedPiece === name ? "rgba(26,86,255,0.08)" : "#fff",
+                          cursor: "pointer"
+                        }}
+                      >
+                        {name.replace(/_/g, " ")} {piece.quantity > 1 ? `×${piece.quantity}` : ""}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {/* SVG kalıp görseli */}
                 <div style={{ background: "#fafaf8", borderRadius: 12, padding: 20, minHeight: 300, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-                  {renderPatternSVG() || (
+                  {renderPatternSVG(selectedPiece || undefined) || (
                     <p style={{ color: "var(--muted)" }}>Kalıp verisi SVG olarak görüntülenemiyor.</p>
                   )}
                 </div>
 
-                {/* Parça listesi */}
-                {patternResult.pieces && (
+                {/* Seçili parça detayları */}
+                {selectedPiece && patternResult.pieces?.[selectedPiece] && (() => {
+                  const piece = patternResult.pieces[selectedPiece];
+                  return (
+                    <div style={{ marginTop: 20, padding: 20, background: "rgba(26,86,255,0.03)", borderRadius: 14, border: "1px solid rgba(26,86,255,0.1)" }}>
+                      <h4 style={{ fontWeight: 700, marginBottom: 16, fontSize: 16 }}>
+                        📋 {selectedPiece.replace(/_/g, " ").toUpperCase()} — Detaylar
+                      </h4>
+
+                      {/* Ölçüler tablosu */}
+                      {piece.measurements && (
+                        <div style={{ marginBottom: 16 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>📏 Ölçüler:</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                            {Object.entries(piece.measurements).map(([key, val]: [string, any]) => (
+                              <div key={key} style={{ padding: "8px 12px", background: "#fff", borderRadius: 8, display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                                <span style={{ color: "var(--muted)" }}>{key.replace(/_/g, " ")}</span>
+                                <span style={{ fontWeight: 700 }}>{(val / 10).toFixed(1)} cm</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Pensler */}
+                      {piece.darts && piece.darts.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>📌 Pensler:</div>
+                          {piece.darts.map((dart: any, i: number) => (
+                            <div key={i} style={{ padding: "6px 12px", background: "rgba(255,107,107,0.06)", borderRadius: 8, marginBottom: 4, fontSize: 12 }}>
+                              {dart.type} — Genişlik: {dart.width}mm, Derinlik: {dart.depth}mm
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* İşaret noktaları */}
+                      {piece.notches && piece.notches.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>🔴 İşaret Noktaları:</div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {piece.notches.map((notch: any, i: number) => (
+                              <span key={i} style={{ padding: "4px 10px", background: "rgba(231,76,60,0.08)", borderRadius: 20, fontSize: 11, color: "#e74c3c" }}>
+                                {notch.label}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Notlar */}
+                      {piece.notes && (
+                        <div style={{ padding: "8px 12px", background: "rgba(255,184,0,0.06)", borderRadius: 8, fontSize: 12, color: "#b38600" }}>
+                          📝 {piece.notes}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Parça listesi (tümü seçiliyken) */}
+                {!selectedPiece && patternResult.pieces && (
                   <div style={{ marginTop: 20 }}>
                     <div style={{ fontWeight: 700, marginBottom: 12 }}>Parçalar:</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       {Object.entries(patternResult.pieces).map(([name, piece]: [string, any]) => (
-                        <div key={name} style={{ padding: "10px 14px", background: "var(--surface)", borderRadius: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div
+                          key={name}
+                          onClick={() => setSelectedPiece(name)}
+                          style={{ padding: "10px 14px", background: "var(--surface)", borderRadius: 10, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", transition: "all .15s" }}
+                        >
                           <span style={{ fontWeight: 600, fontSize: 13 }}>{name.replace(/_/g, " ")}</span>
                           <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                            {piece.quantity && `x${piece.quantity}`}
-                            {piece.grain_direction && ` · ${piece.grain_direction}`}
+                            {piece.quantity && `×${piece.quantity}`}
+                            {piece.measurements?.width && ` · ${(piece.measurements.width / 10).toFixed(0)}×${(piece.measurements.height / 10).toFixed(0)} cm`}
                           </span>
                         </div>
                       ))}
@@ -548,12 +809,13 @@ export default function ProjectDetailPage() {
                 <button key={i} className="btn btn-sm btn-ghost">{t}</button>
               ))}
               <div style={{ flex: 1 }} />
+              <button className="btn btn-sm btn-ghost" onClick={exportPatternSVG}>📥 SVG İndir</button>
               <span style={{ fontSize: 12, color: "var(--muted)" }}>2D Pattern Editör</span>
             </div>
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 500, background: "#fafaf8", position: "relative" }}>
               <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, #d4d4d4 1px, transparent 1px)", backgroundSize: "24px 24px", opacity: 0.5 }} />
               <div style={{ position: "relative", zIndex: 1, width: "90%", height: "90%" }}>
-                {patternResult ? renderPatternSVG() : (
+                {patternResult ? renderPatternSVG(selectedPiece || undefined) : (
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--muted)" }}>
                     <p>Önce kalıp oluşturun (Step 2)</p>
                   </div>
@@ -566,19 +828,52 @@ export default function ProjectDetailPage() {
               <div className={styles.panelTitle}>Parçalar</div>
               {patternResult?.pieces ? (
                 Object.entries(patternResult.pieces).map(([name, piece]: [string, any], i: number) => (
-                  <div key={i} style={{ padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, background: "var(--surface)" }}>
-                    <span>{name.replace(/_/g, " ")}</span>
-                    <span style={{ fontSize: 10, color: "#00c896" }}>✓ {piece.quantity && `x${piece.quantity}`}</span>
+                  <div
+                    key={i}
+                    onClick={() => setSelectedPiece(selectedPiece === name ? null : name)}
+                    style={{
+                      padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13,
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      marginBottom: 4,
+                      background: selectedPiece === name ? "rgba(26,86,255,0.1)" : "var(--surface)",
+                      border: selectedPiece === name ? "1.5px solid var(--accent2)" : "1px solid transparent",
+                    }}
+                  >
+                    <span style={{ fontWeight: selectedPiece === name ? 700 : 500 }}>{name.replace(/_/g, " ")}</span>
+                    <span style={{ fontSize: 10, color: "#00c896" }}>✓ {piece.quantity && `×${piece.quantity}`}</span>
                   </div>
                 ))
               ) : (
-                ["Ön Beden", "Arka Beden", "Kol (x2)", "Yaka"].map((p, i) => (
+                ["Ön Beden", "Arka Beden", "Kol (×2)", "Yaka"].map((p, i) => (
                   <div key={i} style={{ padding: "8px 12px", borderRadius: 8, fontSize: 13, marginBottom: 4, background: "var(--surface)", color: "var(--muted)" }}>
                     {p}
                   </div>
                 ))
               )}
             </div>
+
+            {/* Seçili parça detayları */}
+            {selectedPiece && patternResult?.pieces?.[selectedPiece] && (
+              <div className={styles.panelSection}>
+                <div className={styles.panelTitle}>📋 {selectedPiece.replace(/_/g, " ")}</div>
+                {patternResult.pieces[selectedPiece].measurements && (
+                  <div style={{ fontSize: 12 }}>
+                    {Object.entries(patternResult.pieces[selectedPiece].measurements).map(([key, val]: [string, any]) => (
+                      <div key={key} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
+                        <span style={{ color: "var(--muted)" }}>{key.replace(/_/g, " ")}</span>
+                        <span style={{ fontWeight: 600 }}>{(val / 10).toFixed(1)} cm</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {patternResult.pieces[selectedPiece].notes && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: "#b38600", padding: "6px 8px", background: "rgba(255,184,0,0.06)", borderRadius: 6 }}>
+                    📝 {patternResult.pieces[selectedPiece].notes}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ padding: 20 }}>
               <button className="btn btn-accent" style={{ width: "100%" }} onClick={() => setCurrentStep(4)}>Dikiş Payı →</button>
             </div>
@@ -646,19 +941,43 @@ export default function ProjectDetailPage() {
         <div>
           <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 20 }}>QA Validation & Export</h3>
           <h4 style={{ fontWeight: 700, marginBottom: 16 }}>Export Formatları</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-            {[
-              { format: "DXF", icon: "📐", desc: "Lectra, Gerber uyumlu kalıp dosyası" },
-              { format: "PDF", icon: "📄", desc: "A4 tiled, gerçek ölçekli çıktı" },
-              { format: "CSV", icon: "📊", desc: "Parça raporu ve ölçü tablosu" },
-            ].map((e, i) => (
-              <div key={i} style={{ padding: 20, background: "#fff", border: "1px solid var(--border)", borderRadius: 12, textAlign: "center" }}>
-                <div style={{ fontSize: 36, marginBottom: 8 }}>{e.icon}</div>
-                <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, marginBottom: 4 }}>{e.format} Export</div>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>{e.desc}</div>
-                <button className="btn btn-accent btn-sm" style={{ marginTop: 12 }}>İndir</button>
-              </div>
-            ))}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 24 }}>
+            <div style={{ padding: 20, background: "#fff", border: "1px solid var(--border)", borderRadius: 12, textAlign: "center" }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>📐</div>
+              <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, marginBottom: 4 }}>SVG Export</div>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>Vektörel kalıp dosyası — tüm ölçüler dahil</div>
+              <button className="btn btn-accent btn-sm" style={{ marginTop: 12 }} onClick={exportPatternSVG} disabled={!patternResult}>
+                {patternResult ? "📥 İndir" : "Kalıp yok"}
+              </button>
+            </div>
+            <div style={{ padding: 20, background: "#fff", border: "1px solid var(--border)", borderRadius: 12, textAlign: "center" }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
+              <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, marginBottom: 4 }}>PDF Export</div>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>A0 gerçek ölçekli yazdırma</div>
+              <button className="btn btn-accent btn-sm" style={{ marginTop: 12 }} onClick={exportPatternPDF} disabled={!patternResult}>
+                {patternResult ? "📄 Yazdır" : "Kalıp yok"}
+              </button>
+            </div>
+            <div style={{ padding: 20, background: "#fff", border: "1px solid var(--border)", borderRadius: 12, textAlign: "center" }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>📊</div>
+              <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, marginBottom: 4 }}>CSV Export</div>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>Parça raporu ve ölçü tablosu</div>
+              <button className="btn btn-accent btn-sm" style={{ marginTop: 12 }} disabled={!patternResult} onClick={() => {
+                if (!patternResult?.pieces) return;
+                const rows = ["Parça,Adet,Genişlik(cm),Yükseklik(cm),Kumaş Yönü,Not"];
+                Object.entries(patternResult.pieces).forEach(([name, piece]: [string, any]) => {
+                  const w = piece.measurements?.width ? (piece.measurements.width / 10).toFixed(1) : "-";
+                  const h = piece.measurements?.height ? (piece.measurements.height / 10).toFixed(1) : "-";
+                  rows.push(`${name},${piece.quantity || 1},${w},${h},${piece.grain_direction || "vertical"},${(piece.notes || "").replace(/,/g, ";")}`);
+                });
+                const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url; a.download = `kalip-olculer-${project?.name}.csv`; a.click();
+                URL.revokeObjectURL(url);
+              }}>
+                {patternResult ? "📊 İndir" : "Kalıp yok"}
+              </button>
+            </div>
           </div>
         </div>
       )}

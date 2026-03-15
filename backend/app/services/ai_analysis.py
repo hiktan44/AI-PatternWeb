@@ -38,14 +38,14 @@ def _configure_gemini():
 
     genai.configure(api_key=api_key)
 
-    # Varsayılan model — gemini-2.0-flash Google tarafından kaldırıldı
-    model_name = "gemini-2.0-flash-lite"
+    # Varsayılan model — kullanıcı talimatı: önce flash, olmazsa pro
+    model_name = "gemini-3.1-flash-image-preview"
     logger.info(f"Gemini model oluşturuluyor: {model_name}")
     return genai.GenerativeModel(model_name)
 
 
 # Fallback model listesi — generate_content 404 verirse denenecek
-FALLBACK_MODELS = ["gemini-1.5-flash", "gemini-1.5-pro"]
+FALLBACK_MODELS = ["gemini-3.1-pro-preview"]
 
 
 def _try_generate_with_fallback(primary_model, content_parts: list) -> Any:

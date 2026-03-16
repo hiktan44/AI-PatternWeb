@@ -55,7 +55,7 @@ app = FastAPI(
     description="AI destekli kalıp mühendisliği platformu",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/api/v1/docs" if os.environ.get("ENVIRONMENT") != "production" else None,
+    docs_url="/docs",
     redoc_url=None,
 )
 

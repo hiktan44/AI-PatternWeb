@@ -6,6 +6,16 @@ from fastapi import APIRouter, Request
 router = APIRouter()
 
 
+@router.get("/")
+async def root():
+    return {
+        "service": "AI-PatternWeb API",
+        "version": "1.0.0",
+        "docs": "/api/v1/docs",
+        "health": "/health",
+    }
+
+
 @router.get("/health")
 async def health_check(request: Request):
     uptime = 0.0
@@ -18,3 +28,4 @@ async def health_check(request: Request):
         "timestamp": int(time.time() * 1000),
         "uptime": round(uptime, 2),
     }
+

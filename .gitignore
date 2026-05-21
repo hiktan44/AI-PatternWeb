@@ -42,3 +42,8 @@ logs/
 coverage/
 htmlcov/
 .pytest_cache/
+
+# Playwright Testing
+**/playwright-report/
+**/test-results/
+

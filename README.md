@@ -90,6 +90,38 @@ Detaylar için `backend/.env.example` dosyasına bakın.
 - **Rate limit headers:** `X-RateLimit-Limit`, `X-RateLimit-Remaining`
 - **Slow request logging:** 1000ms+ → warning log
 
+## ☁️ Coolify Deployment (Self-Hosting) Rehberi
+
+AI-PatternWeb platformunu Coolify ile kendi sunucunuzda tek tıkla barındırmak için aşağıdaki adımları izleyin:
+
+### 1. Veritabanı ve Redis Kurulumu
+1. Coolify panelinizden **New Resource** → **Databases** → **PostgreSQL** seçerek yeni bir veritabanı oluşturun.
+2. **New Resource** → **Databases** → **Redis** seçerek bir Redis önbellek servisi oluşturun.
+3. Oluşturulan servislerin dahili (internal) bağlantı URL'lerini not edin.
+
+### 2. Backend (FastAPI) Dağıtımı
+1. Coolify'da **New Application** seçin ve GitHub deponuzu bağlayın.
+2. **Dizin (Base Directory):** `/backend` olarak ayarlayın.
+3. **Build Pack:** `Dockerfile` seçin.
+4. **Portlar:** `8000:8000` olarak yapılandırın.
+5. **Sağlık Kontrolü (Health Check):** `/health` yolunu (path) tanımlayın (Uptime kontrolü için zorunludur).
+6. **Ortam Değişkenleri (Environment Variables):**
+   * `DATABASE_URL`: PostgreSQL dahili asenkron adresi (`postgresql+asyncpg://...`)
+   * `REDIS_URL`: Redis dahili adresi (`redis://...`)
+   * `GEMINI_API_KEY`: Google Gemini API anahtarınız
+   * `JWT_SECRET`: Güçlü bir gizli anahtar
+   * `ALLOWED_ORIGINS`: Frontend URL adresiniz (örn: `https://aipatternweb.com`)
+
+### 3. Frontend (Next.js) Dağıtımı
+1. Coolify'da tekrar **New Application** diyerek aynı repoyu bağlayın.
+2. **Dizin (Base Directory):** `/frontend` olarak ayarlayın.
+3. **Build Pack:** `Dockerfile` seçin.
+4. **Portlar:** `3000:3000` olarak yapılandırın.
+5. **Ortam Değişkenleri (Environment Variables):**
+    * `NEXT_PUBLIC_BACKEND_URL`: Üretimdeki Backend URL'niz (örn: `https://api.aipatternweb.com`). Bu değer Next.js build-time sırasında statik olarak derlenecektir.
+
+---
+
 ## 📄 Lisans
 
-MIT
+

@@ -99,8 +99,13 @@ async def security_headers_middleware(request: Request, call_next):
 # 4. Rate Limiting Middleware
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    # Health check'i rate limit'den muaf tut
-    if request.url.path in ("/health", "/api/v1/docs", "/openapi.json"):
+    # Geliştirme ve test kolaylığı için local host veya test ortamlarını rate limit'ten muaf tut
+    client_ip = request.client.host if request.client else "unknown"
+    if (
+        os.environ.get("ENVIRONMENT") in ("development", "test")
+        or client_ip in ("127.0.0.1", "localhost", "::1")
+        or request.url.path in ("/health", "/api/v1/docs", "/openapi.json")
+    ):
         return await call_next(request)
 
     client_ip = request.client.host if request.client else "unknown"

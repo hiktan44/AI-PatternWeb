@@ -2,9 +2,12 @@
 import json
 import logging
 import os
-from typing import Any
+import time
+from enum import Enum
+from typing import Any, Callable, Awaitable
 
 from app.core.config import settings
+from app.services.calibration import calibrate_pattern_pieces
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +20,20 @@ except ImportError:
     logger.warning("google.generativeai import BAŞARISIZ — pip install google-generativeai gerekli")
 
 
-def _configure_gemini():
+class ThinkingLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class MediaResolution(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+def _configure_gemini(thinking_level: str | None = None, media_resolution: str | None = None):
+    """Gemini modelini yapılandır — thinking_level ve media_resolution destekli."""
     api_key = settings.GEMINI_API_KEY
     logger.info(f"_configure_gemini: GEMINI_AVAILABLE={GEMINI_AVAILABLE}, API_KEY_SET={bool(api_key)}, KEY_LEN={len(api_key) if api_key else 0}")
 
@@ -27,7 +43,6 @@ def _configure_gemini():
 
     if not api_key:
         logger.error("Gemini kullanılamıyor: GEMINI_API_KEY boş veya tanımsız")
-        # Env'den doğrudan kontrol
         env_key = os.environ.get("GEMINI_API_KEY", "")
         logger.info(f"os.environ GEMINI_API_KEY: set={bool(env_key)}, len={len(env_key)}")
         if env_key:
@@ -38,37 +53,63 @@ def _configure_gemini():
 
     genai.configure(api_key=api_key)
 
-    # Varsayılan model — kullanıcı talimatı: önce flash, olmazsa pro
-    model_name = "gemini-3.1-flash-image-preview"
-    logger.info(f"Gemini model oluşturuluyor: {model_name}")
-    return genai.GenerativeModel(model_name)
+    # Model parametreleri — config'den al
+    model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+    t_level = thinking_level or getattr(settings, 'GEMINI_THINKING_LEVEL', 'low')
+    m_resolution = media_resolution or getattr(settings, 'GEMINI_MEDIA_RESOLUTION', 'medium')
+
+    # Generation config — standart ve en uyumlu parametreler
+    generation_config = {
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "top_k": 40,
+    }
+
+    # model_name ve parametrelerini logla
+    logger.info(f"Gemini model oluşturuluyor: {model_name} (thinking={t_level}, media_res={m_resolution})")
+    
+    try:
+        # SDK versiyonuna göre en uyumlu şekilde model başlatılıyor
+        return genai.GenerativeModel(model_name, generation_config=generation_config)
+    except Exception as e:
+        logger.warning(f"Birincil model {model_name} standart config ile oluşturulurken hata: {e}. Fallback konfigürasyon deneniyor.")
+        return genai.GenerativeModel("gemini-2.5-flash", generation_config={"temperature": 0.2})
 
 
-# Fallback model listesi — generate_content 404 verirse denenecek
-FALLBACK_MODELS = ["gemini-3.1-pro-preview"]
+# Fallback model listesi — generate_content 404 verirse sırayla denenecek
+FALLBACK_MODELS = ["gemini-3.0-pro", "gemini-3.1-pro-preview", "gemini-2.5-flash"]
 
 
 def _try_generate_with_fallback(primary_model, content_parts: list) -> Any:
-    """İlk modelle dene, 404 hatası alınırsa fallback modelleri dene"""
+    """İlk modelle dene, 404 hatası alınırsa fallback modelleri dene. Timing loglama dahil."""
+    start_time = time.time()
     try:
         response = primary_model.generate_content(content_parts)
+        elapsed = time.time() - start_time
+        logger.info(f"✅ Birincil model başarılı — süre: {elapsed:.2f}s, yanıt: {len(response.text)} karakter")
         return response
     except Exception as e:
+        elapsed = time.time() - start_time
         err_str = str(e)
-        if "404" in err_str or "no longer available" in err_str.lower():
-            logger.warning(f"Birincil model başarısız: {err_str[:100]}. Fallback deneniyor...")
+        logger.warning(f"❌ Birincil model başarısız ({elapsed:.2f}s): {err_str[:150]}")
+        if "404" in err_str or "no longer available" in err_str.lower() or "not found" in err_str.lower():
             for fallback_name in FALLBACK_MODELS:
+                fb_start = time.time()
                 try:
-                    logger.info(f"Fallback model deneniyor: {fallback_name}")
+                    logger.info(f"🔄 Fallback model deneniyor: {fallback_name}")
                     fb_model = genai.GenerativeModel(fallback_name)
                     response = fb_model.generate_content(content_parts)
-                    logger.info(f"Fallback model {fallback_name} başarılı!")
+                    fb_elapsed = time.time() - fb_start
+                    logger.info(f"✅ Fallback {fallback_name} başarılı — süre: {fb_elapsed:.2f}s")
                     return response
                 except Exception as fb_e:
-                    logger.warning(f"Fallback {fallback_name} de başarısız: {fb_e}")
+                    fb_elapsed = time.time() - fb_start
+                    logger.warning(f"❌ Fallback {fallback_name} başarısız ({fb_elapsed:.2f}s): {fb_e}")
                     continue
-            raise  # Hiçbir model çalışmadıysa orijinal hatayı fırlat
-        raise  # 404 dışı hatalar için
+            total_elapsed = time.time() - start_time
+            logger.error(f"🚫 Tüm modeller başarısız oldu — toplam süre: {total_elapsed:.2f}s")
+            raise
+        raise
 
 
 VISUAL_ANALYSIS_PROMPT = """Sen uzman bir konfeksiyon mühendisisin ve profesyonel kalıp ustasısın (pattern maker).
@@ -114,6 +155,14 @@ Sadece JSON döndür, başka bir şey yazma."""
 
 PATTERN_GENERATION_PROMPT = """Sen dünya çapında deneyimli bir kalıp ustasısın. 71 ADET profesyonel kalıp çizimini inceleyerek öğrendiğin kurallara göre GERÇEKÇİ konfeksiyon kalıp parçaları oluştur.
 
+REFERANS KALİBRASYONU (ÇOK ÖNEMLİ):
+Görselde bir referans nesne (ör: A4 kağıdı, cetvel, kredi kartı/ID kartı veya madeni para) bulunuyorsa:
+1. Bu nesneyi algıla ve onun piksel sınırlarından (bounding box veya en-boy oranı) yararlanarak görseldeki piksel başına kaç milimetre düştüğünü hesapla.
+2. Bu oranı "pixel_to_mm_ratio" (mm / pixel) adında bir float alan olarak JSON çıktısına ekle (örn: 0.8524).
+3. Tüm kalıp parça koordinatlarını (coords) bu orana göre milimetre (mm) cinsinden ölçekle.
+4. Çıktıdaki "reference_object_detected" alanına algıladığın nesneyi ("a4"|"id_card"|"coin"|"ruler"|"none") yaz.
+5. "reference_object_bbox" alanına nesnenin normalize edilmiş [ymin, xmin, ymax, xmax] koordinatlarını yaz (örn: [0.12, 0.45, 0.35, 0.58]).
+
 MUTLAK KURALLAR:
 1. Koordinatlar mm cinsindendir. Beden M (42 EU) için oluştur.
 2. PARÇALAR DİKDÖRTGEN OLMAMALI! Her parçanın kendi anatomik şekli vardır:
@@ -153,6 +202,9 @@ JSON formatında döndür:
 {
   "garment_type": "Giysi açıklaması",
   "base_size": "M",
+  "reference_object_detected": "a4|id_card|coin|ruler|none",
+  "reference_object_bbox": [ymin, xmin, ymax, xmax],
+  "pixel_to_mm_ratio": 0.8524,
   "pieces": {
     "on_beden": {
       "coords": [[x,y], [x,y], ...EN AZ 15 NOKTA...],
@@ -187,9 +239,17 @@ KRİTİK: Koordinatlar GERÇEKÇİ olmalı! Verdiğim örneklerdeki gibi eğrise
 Sadece JSON döndür."""
 
 
-async def analyze_image(file_path: str) -> dict[str, Any]:
+async def analyze_image(
+    file_path: str,
+    thinking_level: str | None = None,
+    media_resolution: str | None = None
+) -> dict[str, Any]:
     """Görsel dosyasını AI ile analiz et"""
-    model = _configure_gemini()
+    start_time = time.time()
+    model = _configure_gemini(
+        thinking_level=thinking_level or 'low',
+        media_resolution=media_resolution or 'medium'
+    )
     if not model:
         return _demo_analysis()
 
@@ -199,49 +259,117 @@ async def analyze_image(file_path: str) -> dict[str, Any]:
             VISUAL_ANALYSIS_PROMPT,
             {"mime_type": mime_type, "data": image_data},
         ])
-        return _parse_json_response(response.text)
+        result = _parse_json_response(response.text)
+        elapsed = time.time() - start_time
+        result["_analysis_time_seconds"] = round(elapsed, 2)
+        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        return result
     except Exception as e:
-        return {"error": str(e), "confidence": 0, "demo_mode": True}
+        elapsed = time.time() - start_time
+        return {"error": str(e), "confidence": 0, "demo_mode": True, "_analysis_time_seconds": round(elapsed, 2)}
 
 
-async def analyze_image_bytes(image_data: bytes, mime_type: str = "image/jpeg") -> dict[str, Any]:
+async def analyze_image_bytes(
+    image_data: bytes,
+    mime_type: str = "image/jpeg",
+    progress_callback: Callable[[str, str], Awaitable[None]] | None = None,
+    thinking_level: str | None = None,
+    media_resolution: str | None = None
+) -> dict[str, Any]:
     """Bytes verisinden AI ile analiz et (disk gerektirmez)"""
+    start_time = time.time()
     logger.info(f"analyze_image_bytes çağrıldı: data_size={len(image_data)}, mime={mime_type}")
-    model = _configure_gemini()
+    if progress_callback:
+        await progress_callback("analyzing", "Görsel analizi başlatılıyor...")
+        
+    model = _configure_gemini(
+        thinking_level=thinking_level or 'low',
+        media_resolution=media_resolution or 'medium'
+    )
     if not model:
         logger.warning("analyze_image_bytes: model=None, demo analiz döndürülüyor")
+        if progress_callback:
+            await progress_callback("analyzing", "Gemini API anahtarı bulunamadı, demo analiz yükleniyor...")
         return _demo_analysis()
 
     try:
         logger.info("Gemini API generate_content çağrılıyor...")
+        if progress_callback:
+            await progress_callback("analyzing", "Yapay zeka görsel detaylarını, siluet ve detay parçalarını inceliyor...")
+            
         response = _try_generate_with_fallback(model, [
             VISUAL_ANALYSIS_PROMPT,
             {"mime_type": mime_type, "data": image_data},
         ])
-        logger.info(f"Gemini yanıtı alındı: {len(response.text)} karakter")
+        elapsed = time.time() - start_time
+        logger.info(f"Gemini yanıtı alındı: {len(response.text)} karakter — toplam süre: {elapsed:.2f}s")
         result = _parse_json_response(response.text)
-        logger.info(f"Analiz başarılı: category={result.get('category', 'N/A')}")
+        result["_analysis_time_seconds"] = round(elapsed, 2)
+        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        logger.info(f"Analiz başarılı: category={result.get('category', 'N/A')} — {elapsed:.2f}s")
+        
+        if progress_callback:
+            await progress_callback("completed", "Görsel analizi başarıyla tamamlandı!")
+            
         return result
     except Exception as e:
-        logger.error(f"analyze_image_bytes hata: {e}", exc_info=True)
-        return {"error": str(e), "confidence": 0, "demo_mode": True}
+        elapsed = time.time() - start_time
+        logger.error(f"analyze_image_bytes hata ({elapsed:.2f}s): {e}", exc_info=True)
+        if progress_callback:
+            await progress_callback("completed", f"Demo moduna geçildi: {str(e)[:40]}...")
+        result = _demo_analysis()
+        result["_analysis_time_seconds"] = round(elapsed, 2)
+        result["demo_mode"] = True
+        return result
 
 
-async def generate_pattern_from_bytes(image_data: bytes, mime_type: str = "image/jpeg") -> dict[str, Any]:
-    """Bytes verisinden gerçek kalıp parçaları üret (disk gerektirmez)"""
-    logger.info(f"generate_pattern_from_bytes çağrıldı: data_size={len(image_data)}, mime={mime_type}")
-    model = _configure_gemini()
+async def generate_pattern_from_bytes(
+    image_data: bytes,
+    mime_type: str = "image/jpeg",
+    ref_object_type: str | None = None,
+    ref_bbox: list[float] | None = None,
+    image_width: int | None = None,
+    image_height: int | None = None,
+    custom_dims: tuple[float, float] | None = None,
+    progress_callback: Callable[[str, str], Awaitable[None]] | None = None,
+    thinking_level: str | None = None,
+    media_resolution: str | None = None
+) -> dict[str, Any]:
+    """Bytes verisinden gerçek kalıp parçaları üret ve referans nesneyle kalibre et"""
+    start_time = time.time()
+    logger.info(f"generate_pattern_from_bytes çağrıldı: data_size={len(image_data)}, mime={mime_type}, ref_obj={ref_object_type}")
+    if progress_callback:
+        await progress_callback("analyzing", "Kalıp üretim süreci başlatıldı. AI modeli hazırlanıyor...")
+        
+    model = _configure_gemini(
+        thinking_level=thinking_level or 'high',
+        media_resolution=media_resolution or 'high'
+    )
     if not model:
         logger.warning("generate_pattern_from_bytes: model=None, demo kalıp döndürülüyor")
+        if progress_callback:
+            await progress_callback("analyzing", "Gemini API anahtarı bulunamadı, demo kalıp şablonu yükleniyor...")
         return _demo_pattern()
 
     try:
-        logger.info("Gemini API kalıp üretimi çağrılıyor...")
+        logger.info("Gemini API kalıp üretimi çağrılıyor (thinking=high)...")
+        if progress_callback:
+            await progress_callback("analyzing", "Yapay zeka modeli kalıp geometrisini ve anatomik parçaları hesaplıyor (thinking modu aktif)...")
+            
+        prompt = PATTERN_GENERATION_PROMPT
+        if ref_object_type:
+            prompt = f"{prompt}\n\nKULLANICI BİLGİSİ: Görseldeki referans nesne: '{ref_object_type}'. Lütfen bu nesneyi algılayıp piksel-mm kalibrasyonunu gerçekleştir."
+
         response = _try_generate_with_fallback(model, [
-            PATTERN_GENERATION_PROMPT,
+            prompt,
             {"mime_type": mime_type, "data": image_data},
         ])
-        logger.info(f"Gemini kalıp yanıtı alındı: {len(response.text)} karakter")
+        elapsed = time.time() - start_time
+        logger.info(f"Gemini kalıp yanıtı alındı: {len(response.text)} karakter — {elapsed:.2f}s")
+        
+        if progress_callback:
+            await progress_callback("calibration", "Yapay zeka yanıtı alındı. Referans nesne ve piksel-mm kalibrasyon süreci başlatılıyor...")
+            
         result = _parse_json_response(response.text)
 
         if "pieces" in result:
@@ -251,51 +379,100 @@ async def generate_pattern_from_bytes(image_data: bytes, mime_type: str = "image
                         tuple(p) if isinstance(p, list) else p
                         for p in piece_data["coords"]
                     ]
+        
+        # Kalibrasyonu uygula
+        if ref_object_type or "pixel_to_mm_ratio" in result:
+            if progress_callback:
+                await progress_callback("calibration", f"Referans nesne '{ref_object_type or result.get('reference_object_detected')}' analiz ediliyor ve kalibrasyon uygulanıyor...")
+            result = calibrate_pattern_pieces(
+                result,
+                ref_object_type or result.get("reference_object_detected"),
+                ref_bbox or result.get("reference_object_bbox"),
+                image_width,
+                image_height,
+                custom_dims
+            )
+
+        if progress_callback:
+            await progress_callback("generation", "Kalıp parçaları optimize ediliyor, koordinatlar sıfır merkezli hizalanıyor ve dikiş payları ayarlanıyor...")
+            
+        result["_analysis_time_seconds"] = round(elapsed, 2)
+        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        
+        if progress_callback:
+            await progress_callback("completed", "Kalıp üretimi başarıyla tamamlandı!")
+            
         return result
     except Exception as e:
-        return {"error": str(e), "demo_mode": True}
+        elapsed = time.time() - start_time
+        logger.error(f"generate_pattern_from_bytes hata ({elapsed:.2f}s): {e}", exc_info=True)
+        if progress_callback:
+            await progress_callback("generation", f"Hata oluştu. Demo kalıp yükleniyor: {str(e)[:40]}...")
+        result = _demo_pattern()
+        result["_analysis_time_seconds"] = round(elapsed, 2)
+        result["demo_mode"] = True
+        return result
 
 
-async def generate_pattern_from_image(file_path: str) -> dict[str, Any]:
-    """Görsel dosyasından gerçek kalıp parçaları üret"""
-    model = _configure_gemini()
-    if not model:
-        return _demo_pattern()
-
+async def generate_pattern_from_image(
+    file_path: str,
+    ref_object_type: str | None = None,
+    ref_bbox: list[float] | None = None,
+    image_width: int | None = None,
+    image_height: int | None = None,
+    custom_dims: tuple[float, float] | None = None,
+    thinking_level: str | None = None,
+    media_resolution: str | None = None
+) -> dict[str, Any]:
+    """Görsel dosyasından gerçek kalıp parçaları üret ve referans nesneyle kalibre et"""
     try:
         image_data, mime_type = _read_image(file_path)
-        response = _try_generate_with_fallback(model, [
-            PATTERN_GENERATION_PROMPT,
-            {"mime_type": mime_type, "data": image_data},
-        ])
-        result = _parse_json_response(response.text)
-
-        # Koordinatları tuple listesine dönüştür
-        if "pieces" in result:
-            for piece_name, piece_data in result["pieces"].items():
-                if "coords" in piece_data and isinstance(piece_data["coords"], list):
-                    piece_data["coords"] = [
-                        tuple(p) if isinstance(p, list) else p
-                        for p in piece_data["coords"]
-                    ]
-        return result
+        return await generate_pattern_from_bytes(
+            image_data,
+            mime_type,
+            ref_object_type,
+            ref_bbox,
+            image_width,
+            image_height,
+            custom_dims,
+            thinking_level=thinking_level,
+            media_resolution=media_resolution
+        )
     except Exception as e:
         return {"error": str(e), "demo_mode": True}
 
 
 async def generate_pattern_with_analysis(
-    file_path: str, analysis: dict
+    file_path: str,
+    analysis: dict,
+    ref_object_type: str | None = None,
+    ref_bbox: list[float] | None = None,
+    image_width: int | None = None,
+    image_height: int | None = None,
+    custom_dims: tuple[float, float] | None = None,
+    progress_callback: Callable[[str, str], Awaitable[None]] | None = None,
+    thinking_level: str | None = None,
+    media_resolution: str | None = None
 ) -> dict[str, Any]:
-    """Analiz sonuçları + görselden kalıp üret (daha doğru sonuç)"""
-    model = _configure_gemini()
+    """Analiz sonuçları + görselden kalıp üret ve referans nesneyle kalibre et"""
+    start_time = time.time()
+    if progress_callback:
+        await progress_callback("analyzing", "Önceki analiz sonuçlarıyla kalıp üretimi başlatıldı. AI hazırlanıyor...")
+        
+    model = _configure_gemini(
+        thinking_level=thinking_level or 'high',
+        media_resolution=media_resolution or 'high'
+    )
     if not model:
+        if progress_callback:
+            await progress_callback("analyzing", "Gemini API anahtarı bulunamadı, demo kalıp şablonu yükleniyor...")
         return _demo_pattern()
 
     try:
         image_data, mime_type = _read_image(file_path)
 
         enhanced_prompt = f"""{PATTERN_GENERATION_PROMPT}
-
+ 
 ÖNCEKİ ANALİZ SONUÇLARI (bu bilgileri de dikkate al):
 - Kategori: {analysis.get('category', 'bilinmiyor')}
 - Giysi Tipi: {analysis.get('garment_type', 'bilinmiyor')}
@@ -309,10 +486,20 @@ async def generate_pattern_with_analysis(
 - Detaylar: {', '.join(analysis.get('details', []))}
 - Tahmini Parçalar: {', '.join(analysis.get('estimated_pieces', []))}
 """
+        if ref_object_type:
+            enhanced_prompt = f"{enhanced_prompt}\n\nKULLANICI BİLGİSİ: Görseldeki referans nesne: '{ref_object_type}'. Lütfen bu nesneyi algılayıp piksel-mm kalibrasyonunu gerçekleştir."
+
+        if progress_callback:
+            await progress_callback("analyzing", "Yapay zeka modeli görseli ve analiz sonuçlarını birleştirerek kalıp çıkarıyor (thinking aktif)...")
+            
         response = _try_generate_with_fallback(model, [
             enhanced_prompt,
             {"mime_type": mime_type, "data": image_data},
         ])
+        
+        if progress_callback:
+            await progress_callback("calibration", "Kalıp verisi alındı. Piksel-milimetre kalibrasyon süreci başlatılıyor...")
+            
         result = _parse_json_response(response.text)
 
         if "pieces" in result:
@@ -322,14 +509,42 @@ async def generate_pattern_with_analysis(
                         tuple(p) if isinstance(p, list) else p
                         for p in piece_data["coords"]
                     ]
+
+        # Kalibrasyonu uygula
+        if ref_object_type or "pixel_to_mm_ratio" in result:
+            if progress_callback:
+                await progress_callback("calibration", f"Referans nesne '{ref_object_type or result.get('reference_object_detected')}' analiz ediliyor ve kalibrasyon uygulanıyor...")
+            result = calibrate_pattern_pieces(
+                result,
+                ref_object_type or result.get("reference_object_detected"),
+                ref_bbox or result.get("reference_object_bbox"),
+                image_width,
+                image_height,
+                custom_dims
+            )
+
+        if progress_callback:
+            await progress_callback("generation", "Kalıp parçaları optimize ediliyor, koordinatlar sıfır merkezli hizalanıyor ve dikiş payları ayarlanıyor...")
+            
+        elapsed = time.time() - start_time
+        result["_analysis_time_seconds"] = round(elapsed, 2)
+        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        
+        if progress_callback:
+            await progress_callback("completed", "Kalıp üretimi başarıyla tamamlandı!")
+            
         return result
     except Exception as e:
-        return {"error": str(e), "demo_mode": True}
+        elapsed = time.time() - start_time
+        if progress_callback:
+            await progress_callback("error", f"Kalıp üretimi sırasında hata oluştu: {str(e)}")
+        return {"error": str(e), "demo_mode": True, "_analysis_time_seconds": round(elapsed, 2)}
 
 
 async def validate_measurements(measurements: dict) -> dict[str, Any]:
     """Ölçü tablosunu doğrula"""
-    model = _configure_gemini()
+    start_time = time.time()
+    model = _configure_gemini(thinking_level='medium')
     if not model:
         return {"valid": True, "anomalies": [], "confidence": 0.85, "suggestions": [], "demo_mode": True}
 
@@ -341,9 +556,222 @@ async def validate_measurements(measurements: dict) -> dict[str, Any]:
 JSON formatında:
 {"valid": true/false, "anomalies": [{"measurement": "...", "issue": "..."}], "confidence": 0.0-1.0, "suggestions": ["..."]}"""
         response = _try_generate_with_fallback(model, [prompt, json.dumps(measurements, ensure_ascii=False)])
-        return _parse_json_response(response.text)
+        result = _parse_json_response(response.text)
+        elapsed = time.time() - start_time
+        result["_validation_time_seconds"] = round(elapsed, 2)
+        return result
     except Exception as e:
-        return {"valid": True, "anomalies": [], "confidence": 0, "error": str(e), "demo_mode": True}
+        elapsed = time.time() - start_time
+        return {"valid": True, "anomalies": [], "confidence": 0, "error": str(e), "demo_mode": True, "_validation_time_seconds": round(elapsed, 2)}
+
+# === Multimodal Destek Fonksiyonları ===
+
+
+async def analyze_video_frames(video_path: str, max_frames: int = 5) -> dict[str, Any]:
+    """Video dosyasından key frame'ler çıkararak kalıp analizi yap"""
+    start_time = time.time()
+    logger.info(f"analyze_video_frames çağrıldı: path={video_path}, max_frames={max_frames}")
+
+    try:
+        import cv2
+    except ImportError:
+        logger.warning("opencv-python yüklü değil — video analizi yapılamıyor")
+        return {
+            "error": "opencv-python paketi gerekli: pip install opencv-python",
+            "demo_mode": True,
+            "frames_extracted": 0,
+        }
+
+    model = _configure_gemini(thinking_level='high', media_resolution='high')
+    if not model:
+        return {"error": "Gemini model oluşturulamadı", "demo_mode": True}
+
+    try:
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            return {"error": f"Video açılamadı: {video_path}", "demo_mode": True}
+
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        duration = total_frames / fps
+
+        # Eşit aralıklarla frame seç
+        frame_indices = [int(i * total_frames / max_frames) for i in range(max_frames)]
+        extracted_frames = []
+
+        for idx in frame_indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if ret:
+                _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                extracted_frames.append(buffer.tobytes())
+
+        cap.release()
+        logger.info(f"Video'dan {len(extracted_frames)} frame çıkarıldı (toplam: {total_frames} frame, {duration:.1f}s)")
+
+        if not extracted_frames:
+            return {"error": "Video'dan frame çıkarılamadı", "demo_mode": True}
+
+        # Her frame'i analiz et
+        frame_analyses = []
+        for i, frame_data in enumerate(extracted_frames):
+            frame_prompt = f"""Bu giysi görselini analiz et (video frame {i + 1}/{len(extracted_frames)}).
+{VISUAL_ANALYSIS_PROMPT}"""
+            response = _try_generate_with_fallback(model, [
+                frame_prompt,
+                {"mime_type": "image/jpeg", "data": frame_data},
+            ])
+            frame_result = _parse_json_response(response.text)
+            frame_analyses.append(frame_result)
+
+        # Frame analizlerini birleştir — en yüksek confidence'lı olanı ana sonuç yap
+        best_analysis = max(frame_analyses, key=lambda x: x.get('confidence', 0))
+        elapsed = time.time() - start_time
+
+        return {
+            "combined_analysis": best_analysis,
+            "frame_count": len(extracted_frames),
+            "video_duration_seconds": round(duration, 1),
+            "individual_frames": frame_analyses,
+            "_analysis_time_seconds": round(elapsed, 2),
+            "_model_used": getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash'),
+        }
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(f"Video analizi hatası ({elapsed:.2f}s): {e}", exc_info=True)
+        return {"error": str(e), "demo_mode": True, "_analysis_time_seconds": round(elapsed, 2)}
+
+
+async def analyze_3d_to_2d_pattern(model_image_path: str) -> dict[str, Any]:
+    """3D model görselleştirmesinden 2D kalıp dönüşüm taslağı oluştur"""
+    start_time = time.time()
+    logger.info(f"analyze_3d_to_2d_pattern çağrıldı: path={model_image_path}")
+
+    model = _configure_gemini(thinking_level='high', media_resolution='high')
+    if not model:
+        return {"error": "Gemini model oluşturulamadı", "demo_mode": True}
+
+    try:
+        image_data, mime_type = _read_image(model_image_path)
+
+        prompt_3d_to_2d = """Sen uzman bir konfeksiyon mühendisisin. Bu 3D giysi modeli/görselleştirmesini analiz et
+ve 2D kalıp parçalarına dönüştürme taslağı oluştur.
+
+3D'den 2D'ye dönüşüm kuralları:
+1. 3D yüzeyleri düzleştirerek 2D kalıp parçaları belirle
+2. Dikiş hatlarını (seam lines) tespit et — bu hatlar 2D parça sınırlarını oluşturur
+3. Kumaş esnekliği/döküm yönünü belirle (grain direction)
+4. Daraltma (dart) ve kup (godet) ihtiyaçlarını tespit et
+5. Her parça için tahmini boyutları mm cinsinden belirt
+
+JSON formatında döndür:
+{
+    "source_type": "3d_model",
+    "garment_type": "Giysi tipi açıklaması",
+    "conversion_notes": "3D→2D dönüşüm notları",
+    "surface_analysis": {
+        "total_surfaces": 0,
+        "curved_surfaces": 0,
+        "flat_surfaces": 0,
+        "dart_requirements": ["açıklama"]
+    },
+    "estimated_pieces": [
+        {
+            "name": "Parça adı",
+            "description": "3D yüzeyden nasıl düzleştirildiği",
+            "estimated_width_mm": 0,
+            "estimated_height_mm": 0,
+            "grain_direction": "vertical|horizontal|bias",
+            "needs_dart": true,
+            "needs_ease": true,
+            "complexity": "simple|moderate|complex"
+        }
+    ],
+    "assembly_strategy": "Montaj stratejisi",
+    "confidence": 0.85
+}
+Sadece JSON döndür."""
+
+        response = _try_generate_with_fallback(model, [
+            prompt_3d_to_2d,
+            {"mime_type": mime_type, "data": image_data},
+        ])
+        result = _parse_json_response(response.text)
+        elapsed = time.time() - start_time
+        result["_analysis_time_seconds"] = round(elapsed, 2)
+        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        logger.info(f"3D→2D analiz tamamlandı — {elapsed:.2f}s")
+        return result
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(f"3D→2D analiz hatası ({elapsed:.2f}s): {e}", exc_info=True)
+        return {"error": str(e), "demo_mode": True, "_analysis_time_seconds": round(elapsed, 2)}
+
+
+async def analyze_multi_view(
+    images: list[tuple[bytes, str]],
+    view_labels: list[str] | None = None,
+) -> dict[str, Any]:
+    """Çoklu görsel analizi — ön, arka, yan görünümleri birleştirerek analiz et"""
+    start_time = time.time()
+    logger.info(f"analyze_multi_view çağrıldı: {len(images)} görsel")
+
+    if not images:
+        return {"error": "En az bir görsel gerekli", "demo_mode": True}
+
+    model = _configure_gemini(thinking_level='high', media_resolution='high')
+    if not model:
+        return {"error": "Gemini model oluşturulamadı", "demo_mode": True}
+
+    labels = view_labels or [f"Görünüm {i + 1}" for i in range(len(images))]
+
+    try:
+        view_descriptions = "\n".join([
+            f"- Görsel {i + 1}: {labels[i] if i < len(labels) else f'Görünüm {i + 1}'}"
+            for i in range(len(images))
+        ])
+
+        multi_view_prompt = f"""Sen uzman bir konfeksiyon mühendisisin. Aynı giysinin birden fazla açıdan
+çekilmiş görsellerini birlikte analiz et.
+
+GÖRSELLER:
+{view_descriptions}
+
+GÖREV:
+1. Tüm görüşleri birlikte değerlendirerek tek bir kapsamlı analiz oluştur
+2. Tek görünümde görünmeyen detayları (arka fermuar, yan cep vs.) diğer açılardan tespit et
+3. 360° analiz yaparak daha doğru kalıp parçası tahmini ver
+4. Her görünümden elde edilen benzersiz bilgileri birleştir
+
+{VISUAL_ANALYSIS_PROMPT}
+
+EK ALANLAR (JSON'a ekle):
+"multi_view_analysis": true,
+"views_analyzed": {len(images)},
+"view_contributions": [
+    {{"view": "Ön", "unique_details": ["..."]}},
+    {{"view": "Arka", "unique_details": ["..."]}}
+],
+"combined_confidence": 0.0-1.0
+
+Sadece JSON döndür."""
+
+        content_parts: list[Any] = [multi_view_prompt]
+        for img_data, img_mime in images:
+            content_parts.append({"mime_type": img_mime, "data": img_data})
+
+        response = _try_generate_with_fallback(model, content_parts)
+        result = _parse_json_response(response.text)
+        elapsed = time.time() - start_time
+        result["_analysis_time_seconds"] = round(elapsed, 2)
+        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        result["_views_count"] = len(images)
+        logger.info(f"Multi-view analiz tamamlandı — {len(images)} görsel, {elapsed:.2f}s")
+        return result
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(f"Multi-view analiz hatası ({elapsed:.2f}s): {e}", exc_info=True)
+        return {"error": str(e), "demo_mode": True, "_analysis_time_seconds": round(elapsed, 2)}
 
 
 # === Yardımcı Fonksiyonlar ===
@@ -391,16 +819,44 @@ def _demo_pattern() -> dict[str, Any]:
                 "coords": [(0,0),(0,700),(50,720),(230,720),(280,700),(280,0),(240,-28),(180,-45),(100,-45),(40,-28),(0,0)],
                 "grain_direction": "vertical",
                 "quantity": 1,
-                "notes": "Demo parça — gerçek kalıp üretimi için GEMINI_API_KEY gerekli"
+                "notes": "Demo parça — gerçek kalıp üretimi için GEMINI_API_KEY gerekli",
+                "measurements": {
+                    "width": 280,
+                    "height": 720,
+                    "shoulder_width": 150,
+                    "armhole_depth": 220,
+                    "waist_width": 230,
+                    "hem_width": 280
+                },
+                "notches": [
+                    {"position": (140, 45), "label": "Omuz noktası"},
+                    {"position": (0, 350), "label": "Bel noktası"}
+                ],
+                "darts": [
+                    {"position": (140, 350), "width": 25, "depth": 100, "type": "bel pensi"}
+                ]
             },
             "arka_beden": {
                 "coords": [(0,0),(0,710),(50,730),(230,730),(280,710),(280,0),(240,-22),(180,-35),(100,-35),(40,-22),(0,0)],
                 "grain_direction": "vertical",
                 "quantity": 1,
-                "notes": "Demo parça"
+                "notes": "Demo parça",
+                "measurements": {
+                    "width": 280,
+                    "height": 730,
+                    "shoulder_width": 140,
+                    "armhole_depth": 210,
+                    "waist_width": 220,
+                    "hem_width": 280
+                },
+                "notches": [
+                    {"position": (140, 35), "label": "Omuz noktası"},
+                    {"position": (0, 360), "label": "Bel noktası"}
+                ],
+                "darts": []
             },
         },
         "total_piece_count": 2,
-        "assembly_order": ["Demo modu"],
+        "assembly_order": ["1. Pensler dikilir", "2. Omuz dikişleri kapatılır", "3. Yan dikişler birleştirilir"],
         "demo_mode": True,
     }

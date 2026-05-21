@@ -1,13 +1,15 @@
 """Pattern API — AI analiz, geometri işlemleri, grading, marker ve export"""
 import os
 import uuid
+import base64
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from jose import JWTError, jwt
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -24,6 +26,7 @@ from app.services.geometry import (
     DEFAULT_SEAM_ALLOWANCES, GRADING_RULES,
 )
 from app.services.export import create_dxf, create_pdf_report
+from app.services.events import trigger_pattern_generated_event, trigger_export_event
 
 router = APIRouter()
 
@@ -40,6 +43,8 @@ class GradeRequest(BaseModel):
     target_sizes: List[str] = ["S", "M", "L", "XL"]
     standard: str = "tse"
     file_id: str = ""
+    thinking_level: str | None = None
+    media_resolution: str | None = None
 
 
 class SeamRequest(BaseModel):
@@ -178,10 +183,17 @@ async def generate_pattern(
             # Önceki analiz sonuçları varsa kullan
             if project_file.analysis_result:
                 ai_pattern = await generate_pattern_with_analysis(
-                    project_file.file_path, project_file.analysis_result
+                    project_file.file_path,
+                    project_file.analysis_result,
+                    thinking_level=data.thinking_level,
+                    media_resolution=data.media_resolution
                 )
             else:
-                ai_pattern = await generate_pattern_from_image(project_file.file_path)
+                ai_pattern = await generate_pattern_from_image(
+                    project_file.file_path,
+                    thinking_level=data.thinking_level,
+                    media_resolution=data.media_resolution
+                )
     else:
         # file_id yoksa, proje dosyalarından ilk resmi bul
         files_result = await db.execute(
@@ -194,10 +206,17 @@ async def generate_pattern(
                 if ext in [".jpg", ".jpeg", ".png", ".webp"]:
                     if pf.analysis_result:
                         ai_pattern = await generate_pattern_with_analysis(
-                            pf.file_path, pf.analysis_result
+                            pf.file_path,
+                            pf.analysis_result,
+                            thinking_level=data.thinking_level,
+                            media_resolution=data.media_resolution
                         )
                     else:
-                        ai_pattern = await generate_pattern_from_image(pf.file_path)
+                        ai_pattern = await generate_pattern_from_image(
+                            pf.file_path,
+                            thinking_level=data.thinking_level,
+                            media_resolution=data.media_resolution
+                        )
                     break
 
     # AI kalıp başarılıysa döndür
@@ -330,6 +349,13 @@ async def export_pattern(
         with open(output_path, "rb") as f:
             content = f.read()
 
+        await trigger_export_event(
+            project_id=data.project_id,
+            export_format="dxf",
+            status="success",
+            user_id=user.id
+        )
+
         return Response(
             content=content,
             media_type="application/dxf",
@@ -345,6 +371,14 @@ async def export_pattern(
             "version": project.version,
             "status": project.status,
         })
+
+        await trigger_export_event(
+            project_id=data.project_id,
+            export_format="pdf",
+            status="success",
+            user_id=user.id
+        )
+
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -352,3 +386,147 @@ async def export_pattern(
         )
 
     raise HTTPException(status_code=400, detail="Desteklenmeyen format. 'dxf' veya 'pdf' kullanın.")
+
+
+@router.websocket("/generate-ws")
+async def generate_pattern_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
+    """WebSocket ile gerçek zamanlı kalıp üretim süreci takibi"""
+    await websocket.accept()
+    
+    # 1. JWT Token Yetkilendirmesi (Querystring'den al)
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.send_json({"step": "error", "message": "Yetkilendirme token'ı bulunamadı. Bağlantı kapatılıyor."})
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+        
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_id: str = payload.get("sub")
+        if not user_id:
+            await websocket.send_json({"step": "error", "message": "Geçersiz yetkilendirme token'ı."})
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+    except JWTError:
+        await websocket.send_json({"step": "error", "message": "Yetkilendirme token'ı doğrulanamadı."})
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+        
+    # Kullanıcıyı çek
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        await websocket.send_json({"step": "error", "message": "Kullanıcı bulunamadı."})
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+        
+    if user.credits <= 0:
+        await websocket.send_json({"step": "error", "message": "Yetersiz kredi."})
+        await websocket.close(code=status.WS_1002_PROTOCOL_ERROR)
+        return
+
+    try:
+        # 2. İstemciden verileri ve parametreleri bekle
+        data = await websocket.receive_json()
+        image_base64 = data.get("image")
+        ref_object_type = data.get("ref_object_type")
+        ref_bbox = data.get("ref_bbox")
+        image_width = data.get("image_width")
+        image_height = data.get("image_height")
+        custom_dims = data.get("custom_dims")
+        thinking_level = data.get("thinking_level")
+        media_resolution = data.get("media_resolution")
+        
+        if custom_dims and isinstance(custom_dims, list) and len(custom_dims) == 2:
+            custom_dims = tuple(custom_dims)
+        else:
+            custom_dims = None
+
+        if not image_base64:
+            await websocket.send_json({"step": "error", "message": "Görsel verisi gönderilmedi."})
+            return
+
+        # Base64 görseli byte verisine dönüştür
+        if "," in image_base64:
+            _, image_base64 = image_base64.split(",", 1)
+            
+        try:
+            image_data = base64.b64decode(image_base64)
+        except Exception:
+            await websocket.send_json({"step": "error", "message": "Görsel base64 formatı çözülemedi."})
+            return
+
+        # 3. İlerleme Callback Fonksiyonu
+        async def progress_callback(step: str, message: str):
+            try:
+                await websocket.send_json({"step": step, "message": message})
+            except Exception:
+                pass
+
+        # 4. Kalıp Üretimi ve Kalibrasyonu Başlat
+        # credits düşülüyor
+        user.credits -= 1
+        await db.commit()
+
+        pattern_result = await generate_pattern_from_bytes(
+            image_data=image_data,
+            mime_type="image/jpeg",
+            ref_object_type=ref_object_type,
+            ref_bbox=ref_bbox,
+            image_width=image_width,
+            image_height=image_height,
+            custom_dims=custom_dims,
+            progress_callback=progress_callback,
+            thinking_level=thinking_level,
+            media_resolution=media_resolution
+        )
+
+        if "error" in pattern_result:
+            # Hata durumunda krediyi iade et
+            user.credits += 1
+            await db.commit()
+            
+            try:
+                await trigger_pattern_generated_event(
+                    project_id=data.get("project_id", ""),
+                    model_name=ref_object_type or "custom",
+                    status="failed",
+                    user_id=user.id
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger("patternweb.api").error(f"Failed to trigger pattern failed event: {e}")
+
+            await websocket.send_json({
+                "step": "error", 
+                "message": f"Kalıp üretimi başarısız: {pattern_result['error']}",
+                "remaining_credits": user.credits
+            })
+        else:
+            try:
+                await trigger_pattern_generated_event(
+                    project_id=data.get("project_id", ""),
+                    model_name=ref_object_type or "custom",
+                    status="success",
+                    user_id=user.id
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger("patternweb.api").error(f"Failed to trigger pattern success event: {e}")
+
+            await websocket.send_json({
+                "step": "completed", 
+                "message": "Kalıp başarıyla üretildi!", 
+                "data": pattern_result,
+                "remaining_credits": user.credits
+            })
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        await websocket.send_json({"step": "error", "message": f"Beklenmeyen bir hata oluştu: {str(e)}"})
+    finally:
+        try:
+            await websocket.close()
+        except RuntimeError:
+            pass

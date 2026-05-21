@@ -16,6 +16,10 @@ class Settings(BaseSettings):
 
     # AI
     GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.5-flash"
+    GEMINI_FALLBACK_MODEL: str = "gemini-3.0-pro"
+    GEMINI_THINKING_LEVEL: str = "low"       # low | medium | high
+    GEMINI_MEDIA_RESOLUTION: str = "medium"  # low | medium | high
 
     # Payment
     IYZICO_API_KEY: str = ""
@@ -37,6 +41,10 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
+
+    # Webhooks
+    ZAPIER_WEBHOOK_URL: str = ""
+    N8N_WEBHOOK_URL: str = ""
 
     class Config:
         env_file = ".env"

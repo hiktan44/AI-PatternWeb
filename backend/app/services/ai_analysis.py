@@ -1,8 +1,9 @@
-"""AI Analiz Servisi — Gemini API ile görsel analiz ve kalıp üretimi"""
+"""AI Analiz Servisi — Vertex AI Express Mode ile görsel analiz ve kalıp üretimi."""
 import json
 import logging
 import os
 import time
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Awaitable
 
@@ -12,12 +13,14 @@ from app.services.calibration import calibrate_pattern_pieces
 logger = logging.getLogger(__name__)
 
 try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-    logger.info("google.generativeai başarıyla import edildi")
+    from google import genai
+    from google.genai import types
+
+    VERTEX_AVAILABLE = True
+    logger.info("google-genai başarıyla import edildi")
 except ImportError:
-    GEMINI_AVAILABLE = False
-    logger.warning("google.generativeai import BAŞARISIZ — pip install google-generativeai gerekli")
+    VERTEX_AVAILABLE = False
+    logger.warning("google-genai import BAŞARISIZ — pip install google-genai gerekli")
 
 
 class ThinkingLevel(str, Enum):
@@ -32,52 +35,74 @@ class MediaResolution(str, Enum):
     HIGH = "high"
 
 
-def _configure_gemini(thinking_level: str | None = None, media_resolution: str | None = None):
-    """Gemini modelini yapılandır — thinking_level ve media_resolution destekli."""
-    api_key = settings.GEMINI_API_KEY
-    logger.info(f"_configure_gemini: GEMINI_AVAILABLE={GEMINI_AVAILABLE}, API_KEY_SET={bool(api_key)}, KEY_LEN={len(api_key) if api_key else 0}")
+@dataclass
+class _VertexModel:
+    client: Any
+    model_name: str
+    generation_config: Any
 
-    if not GEMINI_AVAILABLE:
-        logger.error("Gemini kullanılamıyor: google.generativeai paketi yüklenmemiş")
+    def generate_content(self, content_parts: list[Any]) -> Any:
+        contents = [
+            types.Part.from_bytes(
+                data=part["data"],
+                mime_type=part["mime_type"],
+            )
+            if isinstance(part, dict) and {"data", "mime_type"} <= part.keys()
+            else part
+            for part in content_parts
+        ]
+        return self.client.models.generate_content(
+            model=self.model_name,
+            contents=contents,
+            config=self.generation_config,
+        )
+
+
+def _configure_vertex(thinking_level: str | None = None, media_resolution: str | None = None):
+    """Vertex AI Express Mode istemcisini API anahtarıyla yapılandır."""
+    api_key = settings.VERTEX_API_KEY
+    logger.info(
+        "_configure_vertex: VERTEX_AVAILABLE=%s, API_KEY_SET=%s",
+        VERTEX_AVAILABLE,
+        bool(api_key),
+    )
+
+    if not VERTEX_AVAILABLE:
+        logger.error("Vertex AI kullanılamıyor: google-genai paketi yüklenmemiş")
         return None
 
     if not api_key:
-        logger.error("Gemini kullanılamıyor: GEMINI_API_KEY boş veya tanımsız")
-        env_key = os.environ.get("GEMINI_API_KEY", "")
-        logger.info(f"os.environ GEMINI_API_KEY: set={bool(env_key)}, len={len(env_key)}")
-        if env_key:
-            logger.info("os.environ'dan GEMINI_API_KEY bulundu, settings'de yok — env_key kullanılıyor")
-            api_key = env_key
-        else:
-            return None
-
-    genai.configure(api_key=api_key)
+        logger.error("Vertex AI kullanılamıyor: VERTEX_API_KEY boş veya tanımsız")
+        return None
 
     # Model parametreleri — config'den al
-    model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
-    t_level = thinking_level or getattr(settings, 'GEMINI_THINKING_LEVEL', 'low')
-    m_resolution = media_resolution or getattr(settings, 'GEMINI_MEDIA_RESOLUTION', 'medium')
+    model_name = settings.VERTEX_MODEL
+    t_level = thinking_level or settings.VERTEX_THINKING_LEVEL
+    m_resolution = media_resolution or settings.VERTEX_MEDIA_RESOLUTION
 
     # Generation config — standart ve en uyumlu parametreler
-    generation_config = {
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "top_k": 40,
-    }
+    generation_config = types.GenerateContentConfig(
+        temperature=0.2,
+        top_p=0.95,
+        top_k=40,
+    )
 
     # model_name ve parametrelerini logla
-    logger.info(f"Gemini model oluşturuluyor: {model_name} (thinking={t_level}, media_res={m_resolution})")
-    
-    try:
-        # SDK versiyonuna göre en uyumlu şekilde model başlatılıyor
-        return genai.GenerativeModel(model_name, generation_config=generation_config)
-    except Exception as e:
-        logger.warning(f"Birincil model {model_name} standart config ile oluşturulurken hata: {e}. Fallback konfigürasyon deneniyor.")
-        return genai.GenerativeModel("gemini-2.5-flash", generation_config={"temperature": 0.2})
-
+    logger.info(
+        "Vertex AI Express Mode model hazırlanıyor: %s (thinking=%s, media_res=%s)",
+        model_name,
+        t_level,
+        m_resolution,
+    )
+    client = genai.Client(vertexai=True, api_key=api_key)
+    return _VertexModel(
+        client=client,
+        model_name=model_name,
+        generation_config=generation_config,
+    )
 
 # Fallback model listesi — generate_content 404 verirse sırayla denenecek
-FALLBACK_MODELS = ["gemini-3.0-pro", "gemini-3.1-pro-preview", "gemini-2.5-flash"]
+FALLBACK_MODELS = [settings.VERTEX_FALLBACK_MODEL]
 
 
 def _try_generate_with_fallback(primary_model, content_parts: list) -> Any:
@@ -97,7 +122,11 @@ def _try_generate_with_fallback(primary_model, content_parts: list) -> Any:
                 fb_start = time.time()
                 try:
                     logger.info(f"🔄 Fallback model deneniyor: {fallback_name}")
-                    fb_model = genai.GenerativeModel(fallback_name)
+                    fb_model = _VertexModel(
+                        client=primary_model.client,
+                        model_name=fallback_name,
+                        generation_config=primary_model.generation_config,
+                    )
                     response = fb_model.generate_content(content_parts)
                     fb_elapsed = time.time() - fb_start
                     logger.info(f"✅ Fallback {fallback_name} başarılı — süre: {fb_elapsed:.2f}s")
@@ -246,7 +275,7 @@ async def analyze_image(
 ) -> dict[str, Any]:
     """Görsel dosyasını AI ile analiz et"""
     start_time = time.time()
-    model = _configure_gemini(
+    model = _configure_vertex(
         thinking_level=thinking_level or 'low',
         media_resolution=media_resolution or 'medium'
     )
@@ -262,7 +291,7 @@ async def analyze_image(
         result = _parse_json_response(response.text)
         elapsed = time.time() - start_time
         result["_analysis_time_seconds"] = round(elapsed, 2)
-        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        result["_model_used"] = settings.VERTEX_MODEL
         return result
     except Exception as e:
         elapsed = time.time() - start_time
@@ -282,7 +311,7 @@ async def analyze_image_bytes(
     if progress_callback:
         await progress_callback("analyzing", "Görsel analizi başlatılıyor...")
         
-    model = _configure_gemini(
+    model = _configure_vertex(
         thinking_level=thinking_level or 'low',
         media_resolution=media_resolution or 'medium'
     )
@@ -305,7 +334,7 @@ async def analyze_image_bytes(
         logger.info(f"Gemini yanıtı alındı: {len(response.text)} karakter — toplam süre: {elapsed:.2f}s")
         result = _parse_json_response(response.text)
         result["_analysis_time_seconds"] = round(elapsed, 2)
-        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        result["_model_used"] = settings.VERTEX_MODEL
         logger.info(f"Analiz başarılı: category={result.get('category', 'N/A')} — {elapsed:.2f}s")
         
         if progress_callback:
@@ -341,7 +370,7 @@ async def generate_pattern_from_bytes(
     if progress_callback:
         await progress_callback("analyzing", "Kalıp üretim süreci başlatıldı. AI modeli hazırlanıyor...")
         
-    model = _configure_gemini(
+    model = _configure_vertex(
         thinking_level=thinking_level or 'high',
         media_resolution=media_resolution or 'high'
     )
@@ -397,7 +426,7 @@ async def generate_pattern_from_bytes(
             await progress_callback("generation", "Kalıp parçaları optimize ediliyor, koordinatlar sıfır merkezli hizalanıyor ve dikiş payları ayarlanıyor...")
             
         result["_analysis_time_seconds"] = round(elapsed, 2)
-        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        result["_model_used"] = settings.VERTEX_MODEL
         
         if progress_callback:
             await progress_callback("completed", "Kalıp üretimi başarıyla tamamlandı!")
@@ -459,7 +488,7 @@ async def generate_pattern_with_analysis(
     if progress_callback:
         await progress_callback("analyzing", "Önceki analiz sonuçlarıyla kalıp üretimi başlatıldı. AI hazırlanıyor...")
         
-    model = _configure_gemini(
+    model = _configure_vertex(
         thinking_level=thinking_level or 'high',
         media_resolution=media_resolution or 'high'
     )
@@ -528,7 +557,7 @@ async def generate_pattern_with_analysis(
             
         elapsed = time.time() - start_time
         result["_analysis_time_seconds"] = round(elapsed, 2)
-        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        result["_model_used"] = settings.VERTEX_MODEL
         
         if progress_callback:
             await progress_callback("completed", "Kalıp üretimi başarıyla tamamlandı!")
@@ -544,7 +573,7 @@ async def generate_pattern_with_analysis(
 async def validate_measurements(measurements: dict) -> dict[str, Any]:
     """Ölçü tablosunu doğrula"""
     start_time = time.time()
-    model = _configure_gemini(thinking_level='medium')
+    model = _configure_vertex(thinking_level='medium')
     if not model:
         return {"valid": True, "anomalies": [], "confidence": 0.85, "suggestions": [], "demo_mode": True}
 
@@ -582,7 +611,7 @@ async def analyze_video_frames(video_path: str, max_frames: int = 5) -> dict[str
             "frames_extracted": 0,
         }
 
-    model = _configure_gemini(thinking_level='high', media_resolution='high')
+    model = _configure_vertex(thinking_level='high', media_resolution='high')
     if not model:
         return {"error": "Gemini model oluşturulamadı", "demo_mode": True}
 
@@ -634,7 +663,7 @@ async def analyze_video_frames(video_path: str, max_frames: int = 5) -> dict[str
             "video_duration_seconds": round(duration, 1),
             "individual_frames": frame_analyses,
             "_analysis_time_seconds": round(elapsed, 2),
-            "_model_used": getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash'),
+            "_model_used": settings.VERTEX_MODEL,
         }
     except Exception as e:
         elapsed = time.time() - start_time
@@ -647,7 +676,7 @@ async def analyze_3d_to_2d_pattern(model_image_path: str) -> dict[str, Any]:
     start_time = time.time()
     logger.info(f"analyze_3d_to_2d_pattern çağrıldı: path={model_image_path}")
 
-    model = _configure_gemini(thinking_level='high', media_resolution='high')
+    model = _configure_vertex(thinking_level='high', media_resolution='high')
     if not model:
         return {"error": "Gemini model oluşturulamadı", "demo_mode": True}
 
@@ -699,7 +728,7 @@ Sadece JSON döndür."""
         result = _parse_json_response(response.text)
         elapsed = time.time() - start_time
         result["_analysis_time_seconds"] = round(elapsed, 2)
-        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        result["_model_used"] = settings.VERTEX_MODEL
         logger.info(f"3D→2D analiz tamamlandı — {elapsed:.2f}s")
         return result
     except Exception as e:
@@ -719,7 +748,7 @@ async def analyze_multi_view(
     if not images:
         return {"error": "En az bir görsel gerekli", "demo_mode": True}
 
-    model = _configure_gemini(thinking_level='high', media_resolution='high')
+    model = _configure_vertex(thinking_level='high', media_resolution='high')
     if not model:
         return {"error": "Gemini model oluşturulamadı", "demo_mode": True}
 
@@ -764,7 +793,7 @@ Sadece JSON döndür."""
         result = _parse_json_response(response.text)
         elapsed = time.time() - start_time
         result["_analysis_time_seconds"] = round(elapsed, 2)
-        result["_model_used"] = getattr(settings, 'GEMINI_MODEL', 'gemini-3.5-flash')
+        result["_model_used"] = settings.VERTEX_MODEL
         result["_views_count"] = len(images)
         logger.info(f"Multi-view analiz tamamlandı — {len(images)} görsel, {elapsed:.2f}s")
         return result
@@ -804,7 +833,7 @@ def _demo_analysis() -> dict[str, Any]:
         "sleeve_type": "short",
         "details": [],
         "estimated_pieces": ["front_body", "back_body", "sleeve"],
-        "notes": "GEMINI_API_KEY ortam değişkeni tanımlayın",
+        "notes": "VERTEX_API_KEY ortam değişkeni tanımlayın",
         "demo_mode": True,
     }
 
@@ -819,7 +848,7 @@ def _demo_pattern() -> dict[str, Any]:
                 "coords": [(0,0),(0,700),(50,720),(230,720),(280,700),(280,0),(240,-28),(180,-45),(100,-45),(40,-28),(0,0)],
                 "grain_direction": "vertical",
                 "quantity": 1,
-                "notes": "Demo parça — gerçek kalıp üretimi için GEMINI_API_KEY gerekli",
+                "notes": "Demo parça — gerçek kalıp üretimi için VERTEX_API_KEY gerekli",
                 "measurements": {
                     "width": 280,
                     "height": 720,

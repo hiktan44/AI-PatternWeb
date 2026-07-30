@@ -35,7 +35,8 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${DB_USER:-patternweb}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-patternweb}
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=production
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - VERTEX_API_KEY=${VERTEX_API_KEY}
+      - VERTEX_MODEL=${VERTEX_MODEL:-gemini-3.5-flash}
       - JWT_SECRET=${JWT_SECRET:-change-this-in-production}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
     depends_on:

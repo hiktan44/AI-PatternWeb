@@ -15,11 +15,11 @@ class Settings(BaseSettings):
     JWT_EXPIRATION_MINUTES: int = 1440
 
     # AI
-    GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-3.5-flash"
-    GEMINI_FALLBACK_MODEL: str = "gemini-3.0-pro"
-    GEMINI_THINKING_LEVEL: str = "low"       # low | medium | high
-    GEMINI_MEDIA_RESOLUTION: str = "medium"  # low | medium | high
+    VERTEX_API_KEY: str = ""
+    VERTEX_MODEL: str = "gemini-3.5-flash"
+    VERTEX_FALLBACK_MODEL: str = "gemini-2.5-flash"
+    VERTEX_THINKING_LEVEL: str = "low"       # low | medium | high
+    VERTEX_MEDIA_RESOLUTION: str = "medium"  # low | medium | high
 
     # Payment
     IYZICO_API_KEY: str = ""

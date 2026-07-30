@@ -33,12 +33,12 @@ async def lifespan(application: FastAPI):
 
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-    # GEMINI_API_KEY kontrolü
-    env_key = os.environ.get("GEMINI_API_KEY", "")
-    settings_key = settings.GEMINI_API_KEY
-    logger.info(f"🔑 GEMINI_API_KEY: settings={bool(settings_key)}, env={bool(env_key)}")
+    # Vertex AI Express Mode API anahtarı kontrolü
+    env_key = os.environ.get("VERTEX_API_KEY", "")
+    settings_key = settings.VERTEX_API_KEY
+    logger.info("🔑 VERTEX_API_KEY: settings=%s, env=%s", bool(settings_key), bool(env_key))
     if env_key and not settings_key:
-        logger.warning("⚠️ GEMINI_API_KEY env'de var ama settings'de YOK")
+        logger.warning("⚠️ VERTEX_API_KEY env'de var ama settings'de YOK")
 
     # Tabloları oluştur
     from app.core.database import engine, Base

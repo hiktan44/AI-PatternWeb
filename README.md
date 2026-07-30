@@ -22,7 +22,7 @@ AI-PatternWeb/
 ### Docker ile (Önerilen)
 ```bash
 cp .env.example .env
-# .env dosyasında JWT_SECRET ve GEMINI_API_KEY'i güncelleyin
+# .env dosyasında JWT_SECRET ve VERTEX_API_KEY'i güncelleyin
 docker compose up -d
 ```
 Frontend: http://localhost:3001
@@ -73,7 +73,7 @@ Frontend: http://localhost:3001
 
 - **Frontend:** Next.js 16, TypeScript, Zustand, CSS Modules
 - **Backend:** FastAPI, SQLAlchemy (async), Alembic, Pydantic
-- **AI:** Gemini 3.1 Flash / Pro (fallback)
+- **AI:** Vertex AI Express Mode — Gemini 3.5 Flash / 2.5 Flash fallback
 - **Geometri:** Shapely, ezdxf
 - **DB:** PostgreSQL 15 + Redis 7
 - **Deploy:** Docker, Coolify (self-hosting)
@@ -110,7 +110,8 @@ AI-PatternWeb platformunu Coolify ile kendi sunucunuzda tek tıkla barındırmak
 6. **Ortam Değişkenleri (Environment Variables):**
    * `DATABASE_URL`: PostgreSQL dahili asenkron adresi (`postgresql+asyncpg://...`)
    * `REDIS_URL`: Redis dahili adresi (`redis://...`)
-   * `GEMINI_API_KEY`: Google Gemini API anahtarınız
+   * `VERTEX_API_KEY`: Vertex AI Express Mode API anahtarınız
+   * `VERTEX_MODEL`: Gemini model kimliği (varsayılan `gemini-3.5-flash`)
    * `JWT_SECRET`: Güçlü bir gizli anahtar
    * `ALLOWED_ORIGINS`: Frontend URL adresiniz (örn: `https://aipatternweb.com`)
 
@@ -125,4 +126,3 @@ AI-PatternWeb platformunu Coolify ile kendi sunucunuzda tek tıkla barındırmak
 ---
 
 ## 📄 Lisans
-

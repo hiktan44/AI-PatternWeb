@@ -774,7 +774,7 @@ export default function ProjectDetailPage() {
 
                 {analysisResult.demo_mode && (
                   <div style={{ marginTop: 16, padding: "12px 14px", background: "rgba(255,77,46,0.08)", borderRadius: 10, fontSize: 13, color: "#ff4d2e" }}>
-                    ⚠️ Demo modu — {analysisResult.error || "GEMINI_API_KEY tanımlı değil. Gerçek analiz için API key gerekli."}
+                    ⚠️ Demo modu — {analysisResult.error || "VERTEX_API_KEY tanımlı değil. Gerçek analiz için API key gerekli."}
                   </div>
                 )}
 

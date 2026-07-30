@@ -25,7 +25,7 @@ cp .env.example .env
 # .env dosyasında JWT_SECRET ve GEMINI_API_KEY'i güncelleyin
 docker compose up -d
 ```
-Frontend: http://localhost:3000
+Frontend: http://localhost:3001
 Backend: http://localhost:8000
 API Docs: http://localhost:8000/docs
 
@@ -42,6 +42,8 @@ cd frontend
 npm install
 npm run dev
 ```
+
+Frontend: http://localhost:3001
 
 ## 📋 Özellikler
 
@@ -123,5 +125,4 @@ AI-PatternWeb platformunu Coolify ile kendi sunucunuzda tek tıkla barındırmak
 ---
 
 ## 📄 Lisans
-
 

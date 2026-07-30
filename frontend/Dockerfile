@@ -11,6 +11,8 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 
+RUN apk add --no-cache curl
+
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 

@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 
 from app.services import ai_analysis
@@ -106,3 +107,22 @@ def test_vertex_fallback_reuses_express_mode_client(monkeypatch):
 
     assert response is expected_response
     assert attempted_models == ["gemini-3.5-flash", "gemini-2.5-flash"]
+
+
+def test_analysis_reports_vertex_api_restriction_instead_of_missing_key(monkeypatch):
+    class BlockedModel:
+        def generate_content(self, _content_parts):
+            raise RuntimeError(
+                "403 PERMISSION_DENIED: API_KEY_SERVICE_BLOCKED "
+                "aiplatform.googleapis.com"
+            )
+
+    monkeypatch.setattr(ai_analysis, "_configure_vertex", lambda **_kwargs: BlockedModel())
+
+    result = asyncio.run(ai_analysis.analyze_image_bytes(b"image-bytes", "image/jpeg"))
+
+    assert result["demo_mode"] is True
+    assert result["error"] == (
+        "Vertex AI erişimi Google Cloud API anahtarı kısıtları tarafından engellendi. "
+        "Agent Platform (Vertex AI) API'yi etkinleştirip anahtara izin verin."
+    )

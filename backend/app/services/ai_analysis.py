@@ -349,6 +349,11 @@ async def analyze_image_bytes(
         result = _demo_analysis()
         result["_analysis_time_seconds"] = round(elapsed, 2)
         result["demo_mode"] = True
+        if "API_KEY_SERVICE_BLOCKED" in str(e):
+            result["error"] = (
+                "Vertex AI erişimi Google Cloud API anahtarı kısıtları tarafından engellendi. "
+                "Agent Platform (Vertex AI) API'yi etkinleştirip anahtara izin verin."
+            )
         return result
 
 

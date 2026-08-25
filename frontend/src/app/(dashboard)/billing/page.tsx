@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuthStore } from "@/stores/authStore";
+import { useT } from "@/lib/i18n";
 import styles from "../dashboard.module.css";
 
 const PLANS = [
@@ -12,42 +13,43 @@ const PLANS = [
 
 export default function BillingPage() {
   const { user } = useAuthStore();
+  const t = useT();
 
   return (
     <div>
-      <h1 className={styles.pageTitle}>Plan & Kredi</h1>
-      <p className={styles.pageSubtitle}>Mevcut planınız ve kredi durumunuz</p>
+      <h1 className={styles.pageTitle}>{t("billing.title")}</h1>
+      <p className={styles.pageSubtitle}>{t("billing.subtitle")}</p>
 
       <div className={styles.statsGrid} style={{ marginBottom: 40 }}>
         <div className={styles.statCard}>
           <div className={styles.statCardIcon}>💎</div>
           <div className={styles.statCardValue}>{user?.plan?.toUpperCase() || "STARTER"}</div>
-          <div className={styles.statCardLabel}>Mevcut Plan</div>
+          <div className={styles.statCardLabel}>{t("billing.currentPlan")}</div>
         </div>
         <div className={styles.statCard}>
           <div className={styles.statCardIcon}>🪙</div>
           <div className={styles.statCardValue}>{user?.credits || 0}</div>
-          <div className={styles.statCardLabel}>Kalan Kredi</div>
+          <div className={styles.statCardLabel}>{t("billing.creditsRemaining")}</div>
         </div>
         <div className={styles.statCard}>
           <div className={styles.statCardIcon}>📁</div>
           <div className={styles.statCardValue}>0 / 3</div>
-          <div className={styles.statCardLabel}>Proje Kullanımı</div>
+          <div className={styles.statCardLabel}>{t("billing.projectUsage")}</div>
         </div>
         <div className={styles.statCard}>
           <div className={styles.statCardIcon}>📅</div>
           <div className={styles.statCardValue}>14</div>
-          <div className={styles.statCardLabel}>Trial Kalan Gün</div>
+          <div className={styles.statCardLabel}>{t("billing.trialDays")}</div>
         </div>
       </div>
 
-      <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Planları Karşılaştır</h2>
+      <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 20 }}>{t("billing.compare")}</h2>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
         {PLANS.map((plan, i) => (
           <div key={i} className={styles.projectCard} style={{ padding: 28, border: user?.plan === plan.name.toLowerCase() ? "2px solid var(--accent2)" : undefined }}>
             <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "var(--muted)", marginBottom: 8 }}>{plan.name}</div>
             <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 28, fontWeight: 800, marginBottom: 4 }}>{plan.price}</div>
-            <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20 }}>{plan.credits} kredi</div>
+            <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20 }}>{plan.credits} {t("billing.credits")}</div>
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
               {plan.features.map((f, fi) => (
                 <li key={fi} style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
@@ -56,7 +58,7 @@ export default function BillingPage() {
               ))}
             </ul>
             <button className={`btn ${user?.plan === plan.name.toLowerCase() ? "btn-outline" : "btn-accent"}`} style={{ width: "100%", justifyContent: "center" }}>
-              {user?.plan === plan.name.toLowerCase() ? "Mevcut Plan" : "Yükselt"}
+              {user?.plan === plan.name.toLowerCase() ? t("billing.currentPlanBtn") : t("billing.upgrade")}
             </button>
           </div>
         ))}

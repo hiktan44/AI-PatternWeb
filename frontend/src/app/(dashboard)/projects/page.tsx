@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useAuthStore } from "@/stores/authStore";
+import { useT } from "@/lib/i18n";
 import styles from "../dashboard.module.css";
 
 const API = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
@@ -28,6 +29,7 @@ interface Project {
 
 export default function ProjectsPage() {
   const { token } = useAuthStore();
+  const t = useT();
   const [projects, setProjects] = useState<Project[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -56,17 +58,28 @@ export default function ProjectsPage() {
     }
   };
 
-  const statusLabel: Record<string, string> = { draft: "Taslak", in_review: "İncelemede", approved: "Onaylı", production_ready: "Üretime Hazır" };
+  const statusLabel: Record<string, string> = {
+    draft: t("projects.status.draft"),
+    in_review: t("projects.status.in_review"),
+    approved: t("projects.status.approved"),
+    production_ready: t("projects.status.production_ready")
+  };
   const statusClass: Record<string, string> = { draft: styles.statusDraft, in_review: styles.statusReview, approved: styles.statusApproved, production_ready: styles.statusProduction };
+
+  // Dynamic categories with translations
+  const getCategoryLabel = (categoryId: string) => {
+    const key = `projects.category.${categoryId}`;
+    return t(key);
+  };
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
         <div>
-          <h1 className={styles.pageTitle}>Projeler</h1>
-          <p className={styles.pageSubtitle}>Kalıp projelerinizi yönetin</p>
+          <h1 className={styles.pageTitle}>{t("projects.title")}</h1>
+          <p className={styles.pageSubtitle}>{t("projects.subtitle")}</p>
         </div>
-        <button className="btn btn-accent" onClick={() => setShowModal(true)}>+ Yeni Proje</button>
+        <button className="btn btn-accent" onClick={() => setShowModal(true)}>+ {t("projects.newProject")}</button>
       </div>
 
       <div className={styles.projectGrid}>
@@ -74,7 +87,7 @@ export default function ProjectsPage() {
           <a key={p.id} href={`/projects/${p.id}`} className={styles.projectCard}>
             <div className={styles.projectCardHeader}>
               <span className={styles.projectCategory} style={{ background: "rgba(26,86,255,0.08)", color: "var(--accent2)" }}>
-                {CATEGORIES.find((c) => c.id === p.category)?.icon} {CATEGORIES.find((c) => c.id === p.category)?.label || p.category}
+                {CATEGORIES.find((c) => c.id === p.category)?.icon} {getCategoryLabel(p.category || "")}
               </span>
               <span className={`${styles.projectStatus} ${statusClass[p.status] || styles.statusDraft}`}>
                 {statusLabel[p.status] || p.status}
@@ -90,7 +103,7 @@ export default function ProjectsPage() {
 
         <button className={styles.newProjectBtn} onClick={() => setShowModal(true)}>
           <div className={styles.newProjectIcon}>+</div>
-          <div className={styles.newProjectText}>Yeni Proje Oluştur</div>
+          <div className={styles.newProjectText}>{t("projects.createProject")}</div>
         </button>
       </div>
 
@@ -98,15 +111,15 @@ export default function ProjectsPage() {
       {showModal && (
         <div className={styles.modalOverlay} onClick={() => setShowModal(false)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <h2 className={styles.modalTitle}>Yeni Proje Oluştur</h2>
+            <h2 className={styles.modalTitle}>{t("projects.modalTitle")}</h2>
 
             <div className={styles.formGroup}>
-              <label>Proje Adı *</label>
-              <input className={styles.formInput} placeholder="örn: Yaz Koleksiyonu Gömlek" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <label>{t("projects.projectName")} *</label>
+              <input className={styles.formInput} placeholder={t("projects.projectNamePlaceholder")} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
 
             <div className={styles.formGroup}>
-              <label>Ürün Kategorisi *</label>
+              <label>{t("projects.category")} *</label>
               <div className={styles.categoryGrid}>
                 {CATEGORIES.map((c) => (
                   <div
@@ -115,7 +128,7 @@ export default function ProjectsPage() {
                     onClick={() => c.available && setForm({ ...form, category: c.id })}
                   >
                     <div className={styles.categoryOptionIcon}>{c.icon}</div>
-                    <div className={styles.categoryOptionLabel}>{c.label}</div>
+                    <div className={styles.categoryOptionLabel}>{getCategoryLabel(c.id)}</div>
                   </div>
                 ))}
               </div>
@@ -123,18 +136,18 @@ export default function ProjectsPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div className={styles.formGroup}>
-                <label>Sezon</label>
-                <input className={styles.formInput} placeholder="örn: SS26" value={form.season} onChange={(e) => setForm({ ...form, season: e.target.value })} />
+                <label>{t("projects.season")}</label>
+                <input className={styles.formInput} placeholder={t("projects.seasonPlaceholder")} value={form.season} onChange={(e) => setForm({ ...form, season: e.target.value })} />
               </div>
               <div className={styles.formGroup}>
-                <label>Marka</label>
-                <input className={styles.formInput} placeholder="örn: AVVA" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} />
+                <label>{t("projects.brand")}</label>
+                <input className={styles.formInput} placeholder={t("projects.brandPlaceholder")} value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} />
               </div>
             </div>
 
             <div className={styles.formActions}>
-              <button className="btn btn-outline" onClick={() => setShowModal(false)}>İptal</button>
-              <button className="btn btn-accent" onClick={createProject} disabled={!form.name || !form.category}>Oluştur</button>
+              <button className="btn btn-outline" onClick={() => setShowModal(false)}>{t("projects.cancel")}</button>
+              <button className="btn btn-accent" onClick={createProject} disabled={!form.name || !form.category}>{t("projects.create")}</button>
             </div>
           </div>
         </div>

@@ -2,10 +2,14 @@
 
 import { useEffect } from "react";
 import s from "./page.module.css";
+import { useT } from "@/lib/i18n";
+import { LangSwitch } from "@/components/LangSwitch";
 
 const LOGOS = ["KOTON", "AVVA", "LCW", "MAVİ", "BOYNER", "KIĞILI", "HUMMEL", "SARAR"];
 
 export default function LandingPage() {
+  const t = useT();
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -30,12 +34,15 @@ export default function LandingPage() {
           AI-PatternWeb
         </div>
         <div className={s.navLinks}>
-          <a href="#features">Özellikler</a>
-          <a href="#how">Nasıl Çalışır</a>
-          <a href="#pricing">Fiyatlar</a>
-          <a href="#demo">Demo</a>
+          <a href="#features">{t("nav.features")}</a>
+          <a href="#how">{t("nav.how")}</a>
+          <a href="#pricing">{t("nav.pricing")}</a>
+          <a href="#demo">{t("nav.demo")}</a>
         </div>
-        <a href="/login" className={s.navCta}>Ücretsiz Başla</a>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <LangSwitch />
+          <a href="/login" className={s.navCta}>{t("nav.start")}</a>
+        </div>
       </nav>
 
       {/* HERO */}
@@ -45,30 +52,30 @@ export default function LandingPage() {
         <div className={s.heroLeft}>
           <div className={s.heroBadge}>
             <span className={s.badgeDot} />
-            Yeni: Stripe Eşleşmeli Otomatik Marker
+            {t("hero.badge")}
           </div>
           <h1 className={s.headline}>
-            Fotoğraftan<br />
-            <span className={s.hi}>üretime hazır</span><br />
-            <span className={s.hb}>kalıba.</span>
+            {t("hero.headline1")}<br />
+            <span className={s.hi}>{t("hero.headline2")}</span><br />
+            <span className={s.hb}>{t("hero.headline3")}</span>
           </h1>
           <p className={s.heroSub}>
-            Görsel, eskiz veya ölçü tablosu yükleyin. Yapay zeka destekli, kural tabanlı sistemimiz sizi DXF export&apos;a kadar güvenle taşısın.
+            {t("hero.subtitle")}
           </p>
           <div className={s.heroActions}>
             <a href="/login" className={s.btnPrimary}>
-              14 Gün Ücretsiz Dene
+              {t("hero.cta")}
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </a>
             <a href="#demo" className={s.btnSecondary}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5"/><path d="M6.5 5.5l4 2.5-4 2.5V5.5z" fill="currentColor"/></svg>
-              Demo İzle
+              {t("hero.demo")}
             </a>
           </div>
           <div className={s.heroStats}>
-            <div><div className={s.statNum}>94%</div><div className={s.statLabel}>Ölçü doğruluk oranı</div></div>
-            <div><div className={s.statNum}>12x</div><div className={s.statLabel}>Manuel kalıba kıyasla hız</div></div>
-            <div><div className={s.statNum}>%8</div><div className={s.statLabel}>Ortalama fire düşüşü</div></div>
+            <div><div className={s.statNum}>94%</div><div className={s.statLabel}>{t("hero.stat1")}</div></div>
+            <div><div className={s.statNum}>12x</div><div className={s.statLabel}>{t("hero.stat2")}</div></div>
+            <div><div className={s.statNum}>%8</div><div className={s.statLabel}>{t("hero.stat3")}</div></div>
           </div>
         </div>
 
@@ -159,7 +166,7 @@ export default function LandingPage() {
 
       {/* LOGOS */}
       <div className={s.logosSection}>
-        <div className={s.logosLabel}>Güvenen markalar</div>
+        <div className={s.logosLabel}>{t("logos.label")}</div>
         <div className={s.logosTrack}>
           {[...LOGOS, ...LOGOS].map((l, i) => (
             <div key={i} className={s.logoItem}>{l}</div>
@@ -170,18 +177,18 @@ export default function LandingPage() {
       {/* FEATURES */}
       <section className={s.features} id="features">
         <div className="reveal">
-          <div className={s.sectionLabel}>Özellikler</div>
-          <h2 className={s.sectionTitle}>Üretim zincirinin her adımı için</h2>
-          <p className={s.sectionSub}>Fotoğraftan export&apos;a kadar her aşamada doğrulama katmanlı, kural tabanlı mühendislik.</p>
+          <div className={s.sectionLabel}>{t("nav.features")}</div>
+          <h2 className={s.sectionTitle}>{t("features.title")}</h2>
+          <p className={s.sectionSub}>{t("features.subtitle")}</p>
         </div>
         <div className={`${s.featuresGrid} reveal`}>
           {[
-            { icon: "📸", cls: s.fi1, title: "Görselden Kalıp Çıkarımı", desc: "Ürün fotoğrafı, eskiz veya teknik çizim yükleyin. AI otomatik kategori tespit ederek ön kalıp taslağını oluşturur. Düşük güven skorunda sistem size soru sorar." },
-            { icon: "📏", cls: s.fi2, title: "Ölçü Kalibrasyon Motoru", desc: "Kütüphane + ölçü tablosu + kullanıcı onayı üçlüsüyle çalışır. Tolerans dışı her bölge işaretlenir. Sistem emin olmadığını asla gizlemez." },
-            { icon: "⚡", cls: s.fi3, title: "Otomatik Serileme", desc: "Baz bedenden hedef beden setini saniyeler içinde türetin. TSE, EU ve ABD standartları dahili. Nokta bazlı grading özelleştirme desteği." },
-            { icon: "🧵", cls: s.fi4, title: "Dikiş Payı Yönetimi", desc: "Segment bazlı dikiş payı tanımlaması. Notch, drill, grainline, fold mark ve annotation otomatik. Üretim kuralı kütüphanesi kaydedilebilir." },
-            { icon: "📦", cls: s.fi5, title: "Minimum Fireli Pastal", desc: "Kumaş eni, nap yönü, desen eşleşmesi ve serim tipine göre optimum marker. Fire raporunu indirin, alternatif yerleşimleri karşılaştırın." },
-            { icon: "✅", cls: s.fi6, title: "QA Validation ve Export", desc: "Export öncesi 40+ otomatik kontrol. Açık contour, eksik grainline veya isimsiz parça varsa export kilitlenir. DXF, PDF ve üretim raporu." },
+            { icon: "📸", cls: s.fi1, title: t("features.f1.title"), desc: t("features.f1.desc") },
+            { icon: "📏", cls: s.fi2, title: t("features.f2.title"), desc: t("features.f2.desc") },
+            { icon: "⚡", cls: s.fi3, title: t("features.f3.title"), desc: t("features.f3.desc") },
+            { icon: "🧵", cls: s.fi4, title: t("features.f4.title"), desc: t("features.f4.desc") },
+            { icon: "📦", cls: s.fi5, title: t("features.f5.title"), desc: t("features.f5.desc") },
+            { icon: "✅", cls: s.fi6, title: t("features.f6.title"), desc: t("features.f6.desc") },
           ].map((f, i) => (
             <div key={i} className={s.featureCard}>
               <div className={`${s.featureIcon} ${f.cls}`}>{f.icon}</div>
@@ -195,16 +202,16 @@ export default function LandingPage() {
       {/* HOW IT WORKS */}
       <section className={s.how} id="how">
         <div className="reveal">
-          <div className={s.sectionLabel}>Süreç</div>
-          <h2 className={s.sectionTitle}>4 adımda üretime hazır kalıp</h2>
-          <p className={s.sectionSub}>Her adımda sistem ya sizi yönlendirir ya da onayınızı alır. Hata üretime gitmez.</p>
+          <div className={s.sectionLabel}>{t("nav.how")}</div>
+          <h2 className={s.sectionTitle}>{t("how.title")}</h2>
+          <p className={s.sectionSub}>{t("how.subtitle")}</p>
         </div>
         <div className={`${s.steps} reveal`} style={{ marginTop: 56 }}>
           {[
-            { num: "01", cls: s.sa1, title: "Görsel veya Çizim Yükle", desc: "Fotoğraf, eskiz, teknik çizim veya DXF. Sistem kalite kontrolü yapar, ürün kategorisini tespit eder ve ön kalıp yapısını çıkarır." },
-            { num: "02", cls: s.sa2, title: "Ölçü ve Onay", desc: "Belirsiz alanlar için yapılandırılmış sorular sorulur. Ölçü tablosu verilir, sistem parametrik oturtma yapar ve kalıbı kilitler." },
-            { num: "03", cls: s.sa3, title: "Seri ve Pastal", desc: "Beden serisi otomatik oluşur. Kumaş eni ve serim tipi girilir, minimum fireli marker hesaplanır. Fire raporu hazır." },
-            { num: "04", cls: s.sa4, title: "QA ve Export", desc: "40+ otomatik kontrol. Passed statüsünde DXF, PDF ve üretim raporu export edilir. Lectra, Gerber ve benzeri CAD sistemleriyle uyumlu." },
+            { num: "01", cls: s.sa1, title: t("how.step1.title"), desc: t("how.step1.desc") },
+            { num: "02", cls: s.sa2, title: t("how.step2.title"), desc: t("how.step2.desc") },
+            { num: "03", cls: s.sa3, title: t("how.step3.title"), desc: t("how.step3.desc") },
+            { num: "04", cls: s.sa4, title: t("how.step4.title"), desc: t("how.step4.desc") },
           ].map((step, i) => (
             <div key={i} className={s.step}>
               <span className={s.stepNum}>{step.num}</span>
@@ -219,34 +226,34 @@ export default function LandingPage() {
       {/* VIDEO DEMO */}
       <section className={s.videoSection} id="demo">
         <div className="reveal" style={{ textAlign: "center", marginBottom: 40 }}>
-          <div className={s.sectionLabel} style={{ justifyContent: "center", display: "flex" }}>Demo</div>
-          <h2 className={s.sectionTitle} style={{ margin: "0 auto", textAlign: "center" }}>Görmek inanmaktır</h2>
+          <div className={s.sectionLabel} style={{ justifyContent: "center", display: "flex" }}>{t("nav.demo")}</div>
+          <h2 className={s.sectionTitle} style={{ margin: "0 auto", textAlign: "center" }}>{t("video.title")}</h2>
         </div>
         <div className={`${s.videoWrap} reveal`}>
           <div className={s.videoOverlay}>
             <div className={s.videoPattern} />
             <div className={s.demoElements}>
               <div className={`${s.demoEl} ${s.de1}`}>
-                <div className={s.demoText}>Kalıp parçası</div>
-                <div className={s.demoVal}>Ön Beden</div>
-                <div className={s.demoText} style={{ color: "var(--accent3)", marginTop: 4 }}>✓ Doğrulandı</div>
+                <div className={s.demoText}>{t("video.badge")}</div>
+                <div className={s.demoVal}>{t("video.part")}</div>
+                <div className={s.demoText} style={{ color: "var(--accent3)", marginTop: 4 }}>✓ {t("video.verified")}</div>
               </div>
               <div className={`${s.demoEl} ${s.de2}`}>
-                <div className={s.demoText}>Confidence</div>
+                <div className={s.demoText}>{t("video.confidence")}</div>
                 <div className={s.demoVal}>96.4%</div>
-                <div className={s.demoText} style={{ color: "var(--accent4)", marginTop: 4 }}>▲ Yüksek</div>
+                <div className={s.demoText} style={{ color: "var(--accent4)", marginTop: 4 }}>▲ {t("video.high")}</div>
               </div>
               <div className={`${s.demoEl} ${s.de3}`}>
-                <div className={s.demoText}>Süre</div>
+                <div className={s.demoText}>{t("video.time")}</div>
                 <div className={s.demoVal}>38 sn</div>
-                <div className={s.demoText} style={{ color: "var(--accent3)", marginTop: 4 }}>Analiz tamam</div>
+                <div className={s.demoText} style={{ color: "var(--accent3)", marginTop: 4 }}>{t("video.complete")}</div>
               </div>
             </div>
             <div className={s.playBtn}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M8 5l11 7-11 7V5z" fill="#0d0d0d"/></svg>
             </div>
-            <div className={s.videoTitle}>Fotoğraftan DXF&apos;e: Canlı Demo</div>
-            <div className={s.videoSub}>Basic gömlek — 45 saniye — Gerber uyumlu çıktı</div>
+            <div className={s.videoTitle}>{t("video.title2")}</div>
+            <div className={s.videoSub}>{t("video.subtitle")}</div>
           </div>
         </div>
       </section>
@@ -254,62 +261,62 @@ export default function LandingPage() {
       {/* PRICING */}
       <section className={s.pricing} id="pricing">
         <div className="reveal" style={{ textAlign: "center" }}>
-          <div className={s.sectionLabel} style={{ display: "flex", justifyContent: "center" }}>Fiyatlar</div>
-          <h2 className={s.sectionTitle} style={{ margin: "0 auto", textAlign: "center" }}>Her ölçeğe uygun plan</h2>
-          <p className={s.sectionSub} style={{ margin: "16px auto", textAlign: "center" }}>14 gün ücretsiz deneyin. Kredi kartı gerekmez.</p>
+          <div className={s.sectionLabel} style={{ display: "flex", justifyContent: "center" }}>{t("nav.pricing")}</div>
+          <h2 className={s.sectionTitle} style={{ margin: "0 auto", textAlign: "center" }}>{t("pricing.title")}</h2>
+          <p className={s.sectionSub} style={{ margin: "16px auto", textAlign: "center" }}>{t("pricing.subtitle")}</p>
         </div>
         <div className={`${s.pricingGrid} reveal`}>
           <div className={s.priceCard}>
-            <div className={s.planName}>Starter</div>
-            <div className={s.priceAmount}>Ücretsiz</div>
-            <div className={s.pricePeriod}>Sonsuza kadar</div>
-            <div className={s.priceDesc}>Öğrenciler ve freelancer&apos;lar için temel özellikler.</div>
+            <div className={s.planName}>{t("pricing.starter")}</div>
+            <div className={s.priceAmount}>{t("pricing.free")}</div>
+            <div className={s.pricePeriod}>{t("pricing.forever")}</div>
+            <div className={s.priceDesc}>{t("pricing.starter.desc")}</div>
             <ul className={s.priceFeatures}>
               {["3 proje/ay", "Temel kategoriler", "Watermark'lı PDF export", "Basic serileme"].map((f, i) => (
                 <li key={i}><div className={`${s.pfCheck} ${s.pfcGreen}`}>✓</div>{f}</li>
               ))}
             </ul>
-            <a href="/login" className={s.btnPlan}>Başla</a>
+            <a href="/login" className={s.btnPlan}>{t("pricing.start")}</a>
           </div>
 
           <div className={s.priceCard}>
-            <div className={s.planName}>Professional</div>
-            <div className={s.priceAmount}>₺1.490</div>
-            <div className={s.pricePeriod}>/ay · yıllıkta %20 indirim</div>
-            <div className={s.priceDesc}>Atölyeler, KOBİ markalar ve freelance modelistler için.</div>
+            <div className={s.planName}>{t("pricing.professional")}</div>
+            <div className={s.priceAmount}>{t("pricing.professional.price")}</div>
+            <div className={s.pricePeriod}>{t("pricing.period")}</div>
+            <div className={s.priceDesc}>{t("pricing.professional.desc")}</div>
             <ul className={s.priceFeatures}>
               {["30 proje/ay", "Tüm kategoriler", "DXF export (watermark'sız)", "Gelişmiş serileme", "Marker optimizasyonu", "Email destek (48 saat)"].map((f, i) => (
                 <li key={i}><div className={`${s.pfCheck} ${s.pfcGreen}`}>✓</div>{f}</li>
               ))}
             </ul>
-            <a href="/login" className={s.btnPlan}>14 Gün Dene</a>
+            <a href="/login" className={s.btnPlan}>{t("pricing.try")}</a>
           </div>
 
           <div className={`${s.priceCard} ${s.priceCardFeatured}`}>
-            <div className={s.featuredBadge}>En Popüler</div>
-            <div className={s.planName}>Studio</div>
-            <div className={s.priceAmount}>₺4.290</div>
-            <div className={s.pricePeriod}>/ay · yıllıkta %20 indirim</div>
-            <div className={s.priceDesc}>Üretim grupları, kalıp ofisleri ve ekip çalışması için.</div>
+            <div className={s.featuredBadge}>{t("pricing.popular")}</div>
+            <div className={s.planName}>{t("pricing.studio")}</div>
+            <div className={s.priceAmount}>{t("pricing.studio.price")}</div>
+            <div className={s.pricePeriod}>{t("pricing.period")}</div>
+            <div className={s.priceDesc}>{t("pricing.studio.desc")}</div>
             <ul className={s.priceFeatures}>
               {["Sınırsız proje", "Ekip üyeleri (5 kişi)", "Stripe matching marker", "Tech pack modülü", "Review workflow", "Chat destek (24 saat)"].map((f, i) => (
                 <li key={i}><div className={`${s.pfCheck} ${s.pfcBlue}`}>✓</div>{f}</li>
               ))}
             </ul>
-            <a href="/login" className={`${s.btnPlan} ${s.btnPlanAccent}`}>14 Gün Dene</a>
+            <a href="/login" className={`${s.btnPlan} ${s.btnPlanAccent}`}>{t("pricing.try")}</a>
           </div>
 
           <div className={s.priceCard}>
-            <div className={s.planName}>Enterprise</div>
-            <div className={s.priceAmount}>Özel</div>
-            <div className={s.pricePeriod}>Teklif alın</div>
-            <div className={s.priceDesc}>Fason firmalar, çok markalı gruplar ve PLM entegrasyonu için.</div>
+            <div className={s.planName}>{t("pricing.enterprise")}</div>
+            <div className={s.priceAmount}>{t("pricing.custom")}</div>
+            <div className={s.pricePeriod}>{t("pricing.quote")}</div>
+            <div className={s.priceDesc}>{t("pricing.enterprise.desc")}</div>
             <ul className={s.priceFeatures}>
               {["Sınırsız ekip", "SSO + özel domain", "API erişimi", "PLM/ERP entegrasyon", "Dedicated CSM", "4 saat SLA"].map((f, i) => (
                 <li key={i}><div className={`${s.pfCheck} ${s.pfcGreen}`}>✓</div>{f}</li>
               ))}
             </ul>
-            <a href="/login" className={s.btnPlan}>İletişime Geç</a>
+            <a href="/login" className={s.btnPlan}>{t("pricing.contact")}</a>
           </div>
         </div>
       </section>
@@ -317,8 +324,8 @@ export default function LandingPage() {
       {/* TESTIMONIALS */}
       <section className={s.testimonials}>
         <div className="reveal" style={{ textAlign: "center" }}>
-          <div className={s.sectionLabel} style={{ display: "flex", justifyContent: "center" }}>Kullanıcı Yorumları</div>
-          <h2 className={s.sectionTitle} style={{ margin: "0 auto", textAlign: "center" }}>Üreticiler ne diyor?</h2>
+          <div className={s.sectionLabel} style={{ display: "flex", justifyContent: "center" }}>{t("testimonials.title")}</div>
+          <h2 className={s.sectionTitle} style={{ margin: "0 auto", textAlign: "center" }}>{t("testimonials.subtitle")}</h2>
         </div>
         <div className={`${s.testiGrid} reveal`}>
           {[
@@ -348,18 +355,18 @@ export default function LandingPage() {
         <div className={s.ctaContent}>
           <div className={s.ctaBadge}>
             <span style={{ color: "var(--accent3)" }}>●</span>
-            14 gün ücretsiz · Kredi kartı yok
+            {t("cta.badge")}
           </div>
-          <h2 className={s.ctaTitle}>Üretim güvenli kalıba<br />bugün geçin.</h2>
-          <p className={s.ctaSub}>Binlerce konfeksiyoncu ve modelistle birlikte — fotoğraftan DXF&apos;e, dakikalar içinde.</p>
+          <h2 className={s.ctaTitle}>{t("cta.title")}</h2>
+          <p className={s.ctaSub}>{t("cta.subtitle")}</p>
           <div className={s.ctaActions}>
             <a href="/login" className={s.btnWhite}>
-              Ücretsiz Başla
+              {t("cta.start")}
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </a>
-            <a href="#demo" className={s.btnGhost}>Demo İzle</a>
+            <a href="#demo" className={s.btnGhost}>{t("cta.demo")}</a>
           </div>
-          <div className={s.ctaNote}>Türkiye&apos;de barındırılır · KVKK uyumlu · TSE standartları destekli</div>
+          <div className={s.ctaNote}>{t("cta.note")}</div>
         </div>
       </section>
 
@@ -371,18 +378,18 @@ export default function LandingPage() {
               <span className={s.logoDot} />
               AI-PatternWeb
             </div>
-            <p className={s.footerDesc}>Fotoğraftan üretime hazır kalıba. Yapay zeka destekli, kural tabanlı, üretim güvenli pattern engineering platformu.</p>
+            <p className={s.footerDesc}>{t("footer.desc")}</p>
           </div>
           <div className={s.footerCol}>
-            <h4>Ürün</h4>
+            <h4>{t("footer.product")}</h4>
             <ul className={s.footerLinks}>
-              {["Özellikler", "Fiyatlar", "Güvenlik", "Yol Haritası", "API"].map((l, i) => (
+              {[t("nav.features"), t("nav.pricing"), "Güvenlik", "Yol Haritası", "API"].map((l, i) => (
                 <li key={i}><a href="#">{l}</a></li>
               ))}
             </ul>
           </div>
           <div className={s.footerCol}>
-            <h4>Şirket</h4>
+            <h4>{t("footer.company")}</h4>
             <ul className={s.footerLinks}>
               {["Hakkımızda", "Blog", "Kariyer", "İletişim", "Basın"].map((l, i) => (
                 <li key={i}><a href="#">{l}</a></li>
@@ -390,7 +397,7 @@ export default function LandingPage() {
             </ul>
           </div>
           <div className={s.footerCol}>
-            <h4>Destek</h4>
+            <h4>{t("footer.support")}</h4>
             <ul className={s.footerLinks}>
               {["Dokümantasyon", "Eğitim Videoları", "Topluluk Forum", "KVKK", "Kullanım Şartları"].map((l, i) => (
                 <li key={i}><a href="#">{l}</a></li>
@@ -399,11 +406,11 @@ export default function LandingPage() {
           </div>
         </div>
         <div className={s.footerBottom}>
-          <span>© 2026 AI-PatternWeb. Tüm hakları saklıdır.</span>
+          <span>{t("footer.copyright")}</span>
           <div className={s.footerTags}>
-            <span className={s.tag}>KVKK Uyumlu</span>
-            <span className={s.tag}>TSE Standartları</span>
-            <span className={s.tag}>Türkiye&apos;de Barındırılır</span>
+            <span className={s.tag}>{t("footer.kvkk")}</span>
+            <span className={s.tag}>{t("footer.tse")}</span>
+            <span className={s.tag}>{t("footer.hosted")}</span>
           </div>
         </div>
       </footer>

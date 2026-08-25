@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 import { usePatternWS } from "@/hooks/usePatternWS";
 import AIQAPanel from "@/components/AIQAPanel";
+import { useT } from "@/lib/i18n";
 import styles from "../../dashboard.module.css";
 
 const API = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
@@ -14,20 +15,22 @@ interface ProjectData { id: string; name: string; category: string; status: stri
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const STEPS = [
-  { id: "upload", label: "Görsel Yükle", icon: "📸" },
-  { id: "analyze", label: "AI Analiz", icon: "🤖" },
-  { id: "pattern", label: "Kalıp Oluştur", icon: "✂️" },
-  { id: "edit", label: "Kalıp Editör", icon: "✏️" },
-  { id: "seam", label: "Dikiş Payı", icon: "🧵" },
-  { id: "grade", label: "Serileme", icon: "📐" },
-  { id: "marker", label: "Pastal", icon: "📦" },
-  { id: "qa", label: "QA & Export", icon: "✅" },
-];
-
 export default function ProjectDetailPage() {
   const { id } = useParams();
   const { token } = useAuthStore();
+  const t = useT();
+
+  // Dynamic steps with translations
+  const getSteps = () => [
+    { id: "upload", label: t("project.steps.upload"), icon: "📸" },
+    { id: "analyze", label: t("project.steps.analyze"), icon: "🤖" },
+    { id: "pattern", label: t("project.steps.pattern"), icon: "✂️" },
+    { id: "edit", label: t("project.steps.edit"), icon: "✏️" },
+    { id: "seam", label: t("project.steps.seam"), icon: "🧵" },
+    { id: "grade", label: t("project.steps.grade"), icon: "📐" },
+    { id: "marker", label: t("project.steps.marker"), icon: "📦" },
+    { id: "qa", label: t("project.steps.qa"), icon: "✅" },
+  ];
   const [project, setProject] = useState<ProjectData | null>(null);
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
@@ -603,7 +606,9 @@ export default function ProjectDetailPage() {
     printWindow.print();
   };
 
-  if (!project) return <div className={styles.loadingScreen}><div className={styles.loadingSpinner} /><p>Proje yükleniyor...</p></div>;
+  if (!project) return <div className={styles.loadingScreen}><div className={styles.loadingSpinner} /><p>{t("project.loading")}</p></div>;
+
+  const STEPS = getSteps();
 
   return (
     <div>
@@ -614,7 +619,7 @@ export default function ProjectDetailPage() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <span className={`${styles.projectStatus} ${styles.statusDraft}`} style={{ fontSize: 13 }}>
-            {project.status === "draft" ? "Taslak" : project.status}
+            {project.status === "draft" ? t("project.status.draft") : project.status}
           </span>
         </div>
       </div>
@@ -651,9 +656,9 @@ export default function ProjectDetailPage() {
           >
             <input ref={fileRef} type="file" hidden accept="image/*,.pdf,.dxf,.csv,.xlsx" onChange={(e) => e.target.files?.[0] && uploadFile(e.target.files[0])} />
             <div className={styles.uploadIcon}>{uploading ? "⏳" : "📁"}</div>
-            <div className={styles.uploadTitle}>{uploading ? "Yükleniyor..." : "Dosya Sürükleyin veya Tıklayın"}</div>
-            <div className={styles.uploadSub}>Ürün fotoğrafı, teknik çizim, eskiz, DXF veya ölçü tablosu</div>
-            <div className={styles.uploadFormats}>JPG, PNG, PDF, DXF, CSV, XLSX · Maks 50MB</div>
+            <div className={styles.uploadTitle}>{uploading ? t("project.upload.uploading") : t("project.upload.title")}</div>
+            <div className={styles.uploadSub}>{t("project.upload.subtitle")}</div>
+            <div className={styles.uploadFormats}>{t("project.upload.formats")}</div>
           </div>
 
           {files.length > 0 && (
@@ -677,7 +682,7 @@ export default function ProjectDetailPage() {
 
           {files.length > 0 && (
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
-              <button className="btn btn-accent" onClick={() => setCurrentStep(1)}>Devam → AI Analiz</button>
+              <button className="btn btn-accent" onClick={() => setCurrentStep(1)}>{t("project.upload.continue")}</button>
             </div>
           )}
         </div>
@@ -688,9 +693,9 @@ export default function ProjectDetailPage() {
         <div>
           <div style={{ textAlign: "center", padding: "40px 20px" }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>🤖</div>
-            <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 12 }}>AI Analiz</h3>
+            <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 12 }}>{t("project.analysis.title")}</h3>
             <p style={{ color: "var(--muted)", maxWidth: 480, margin: "0 auto 32px" }}>
-              Yüklediğiniz görseller Gemini AI tarafından analiz edilerek ürün kategorisi, parça yapısı ve detayları belirlenecek.
+              {t("project.analysis.description")}
             </p>
 
             {analysisError && (
@@ -706,7 +711,7 @@ export default function ProjectDetailPage() {
                 disabled={analyzing}
                 style={{ opacity: analyzing ? 0.7 : 1, cursor: analyzing ? "wait" : "pointer" }}
               >
-                {analyzing ? "⏳ Analiz Ediliyor..." : "🤖 Analizi Başlat (1 Kredi)"}
+                {analyzing ? t("project.analysis.analyzing") : t("project.analysis.start")}
               </button>
             )}
           </div>
@@ -716,10 +721,10 @@ export default function ProjectDetailPage() {
             <div style={{ maxWidth: 700, margin: "0 auto" }}>
               <div style={{ padding: 24, background: "#fff", border: "2px solid rgba(0,200,150,0.3)", borderRadius: 16, marginBottom: 24 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                  <h4 style={{ fontWeight: 700, margin: 0 }}>✅ Analiz Sonuçları</h4>
+                  <h4 style={{ fontWeight: 700, margin: 0 }}>{t("project.analysis.results")}</h4>
                   {analysisResult.confidence && (
                     <span style={{ background: "rgba(0,200,150,0.1)", color: "#009a6e", padding: "4px 12px", borderRadius: 20, fontWeight: 700, fontSize: 14 }}>
-                      %{(analysisResult.confidence * 100).toFixed(0)} Güven
+                      %{(analysisResult.confidence * 100).toFixed(0)} {t("project.analysis.confidence")}
                     </span>
                   )}
                 </div>
@@ -818,8 +823,8 @@ export default function ProjectDetailPage() {
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <button className="btn btn-outline" onClick={() => { setAnalysisResult(null); runAnalysis(); }}>🔄 Tekrar Analiz Et</button>
-                <button className="btn btn-accent" onClick={() => setCurrentStep(2)}>Kalıp Oluştur →</button>
+                <button className="btn btn-outline" onClick={() => { setAnalysisResult(null); runAnalysis(); }}>{t("project.analysis.retry")}</button>
+                <button className="btn btn-accent" onClick={() => setCurrentStep(2)}>{t("project.analysis.continue")}</button>
               </div>
             </div>
           )}
@@ -831,9 +836,9 @@ export default function ProjectDetailPage() {
         <div>
           <div style={{ textAlign: "center", padding: "40px 20px", maxWidth: 700, margin: "0 auto" }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>✂️</div>
-            <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 12 }}>AI Kalıp Üretimi</h3>
+            <h3 style={{ fontFamily: "'Syne', sans-serif", fontSize: 22, fontWeight: 700, marginBottom: 12 }}>{t("project.pattern.title")}</h3>
             <p style={{ color: "var(--muted)", maxWidth: 520, margin: "0 auto 32px" }}>
-              Yüklediğiniz görsel ve referans kalibrasyon nesnesi kullanılarak gerçek boyutlu dikiş kalıpları üretilecektir.
+              {t("project.pattern.description")}
             </p>
 
             {/* Premium Referans Nesnesi Seçici (Sadece kalıp oluşturulmamışken ve işlem yapılmıyorken gösterilir) */}
@@ -965,7 +970,7 @@ export default function ProjectDetailPage() {
                 disabled={generating}
                 style={{ opacity: generating ? 0.7 : 1, cursor: generating ? "wait" : "pointer" }}
               >
-                {generating ? "⏳ İşlem Yapılıyor..." : "✂️ Kalıbı Üret (Canlı Takip)"}
+                {generating ? t("project.pattern.generating") : t("project.pattern.generate")}
               </button>
             )}
           </div>

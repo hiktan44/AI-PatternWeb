@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore, apiLogin, apiRegister, apiGoogleLogin } from "@/stores/authStore";
 import Script from "next/script";
+import { useT } from "@/lib/i18n";
+import { LangSwitch } from "@/components/LangSwitch";
 
 declare global {
   interface Window {
@@ -22,6 +24,7 @@ declare global {
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
 export default function LoginPage() {
+  const t = useT();
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,7 +43,7 @@ export default function LoginPage() {
       setAuth(res.user, res.access_token);
       router.push("/dashboard");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Google ile giriş başarısız");
+      setError(err instanceof Error ? err.message : t("auth.error.google"));
     }
     setGoogleLoading(false);
   }, [setAuth, router]);
@@ -83,7 +86,7 @@ export default function LoginPage() {
       setAuth(res.user, res.access_token);
       router.push("/dashboard");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Bir hata oluştu");
+      setError(err instanceof Error ? err.message : t("common.error"));
     }
     setLoading(false);
   };
@@ -132,6 +135,9 @@ export default function LoginPage() {
         }}>
           {/* Logo */}
           <div style={{ textAlign: "center", marginBottom: 32 }}>
+            <div style={{ position: "absolute", top: 20, right: 20 }}>
+              <LangSwitch />
+            </div>
             <a href="/" style={{
               fontFamily: "'Syne', sans-serif",
               fontWeight: 800,
@@ -153,7 +159,7 @@ export default function LoginPage() {
               AI-PatternWeb
             </a>
             <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 14, marginTop: 8 }}>
-              {isRegister ? "Ücretsiz hesap oluşturun" : "Hesabınıza giriş yapın"}
+              {isRegister ? t("auth.signup.title") : t("auth.signin.title")}
             </p>
           </div>
 
@@ -176,7 +182,7 @@ export default function LoginPage() {
               type="button"
               onClick={() => {
                 // Google Client ID yoksa popup ile bilgilendirme
-                setError("Google ile giriş yakında aktif olacak. Lütfen email ile devam edin.");
+                setError(t("auth.error.google"));
               }}
               style={{
                 width: "100%",
@@ -210,7 +216,7 @@ export default function LoginPage() {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
               </svg>
-              Google ile Giriş Yap
+              {t("auth.google")}
             </button>
           )}
 
@@ -223,7 +229,7 @@ export default function LoginPage() {
           }}>
             <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.08)" }} />
             <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: 1 }}>
-              veya
+              {t("auth.or")}
             </span>
             <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.08)" }} />
           </div>
@@ -299,13 +305,13 @@ export default function LoginPage() {
                 boxShadow: "0 4px 16px rgba(255,77,46,0.3)",
               }}
             >
-              {loading ? "Yükleniyor..." : isRegister ? "Kayıt Ol" : "Giriş Yap"}
+              {loading ? t("auth.loading") : isRegister ? t("auth.signup") : t("auth.signin")}
             </button>
           </form>
 
           {/* Switch */}
           <div style={{ textAlign: "center", marginTop: 24, fontSize: 14, color: "rgba(255,255,255,0.4)" }}>
-            {isRegister ? "Zaten hesabınız var mı?" : "Hesabınız yok mu?"}{" "}
+            {isRegister ? t("auth.haveaccount") : t("auth.noaccount")}{" "}
             <button
               onClick={() => { setIsRegister(!isRegister); setError(""); }}
               style={{
@@ -317,7 +323,7 @@ export default function LoginPage() {
                 fontSize: 14,
               }}
             >
-              {isRegister ? "Giriş Yap" : "Ücretsiz Kayıt Ol"}
+              {isRegister ? t("auth.signin") : t("auth.signup.link")}
             </button>
           </div>
 

@@ -1,6 +1,10 @@
 "use client";
 
+import { useT } from "@/lib/i18n";
+
 export default function PrivacyPage() {
+  const t = useT();
+
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "80px 5% 60px" }}>
       <a href="/" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18, marginBottom: 40 }}>
@@ -8,10 +12,10 @@ export default function PrivacyPage() {
         AI-PatternWeb
       </a>
 
-      <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 36, fontWeight: 800, marginBottom: 32, letterSpacing: -1 }}>Gizlilik Politikası (KVKK)</h1>
+      <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 36, fontWeight: 800, marginBottom: 32, letterSpacing: -1 }}>{t("privacy.title")}</h1>
 
       <div style={{ fontSize: 15, color: "var(--muted)", lineHeight: 2 }}>
-        <p style={{ marginBottom: 24 }}>Son güncelleme: Mart 2026</p>
+        <p style={{ marginBottom: 24 }}>{t("privacy.lastUpdated")}</p>
 
         <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 12, marginTop: 32 }}>1. Veri Sorumlusu</h2>
         <p style={{ marginBottom: 24 }}>AI-PatternWeb platformu, 6698 sayılı Kişisel Verilerin Korunması Kanunu (&quot;KVKK&quot;) kapsamında veri sorumlusu sıfatıyla kişisel verilerinizi işlemektedir.</p>
@@ -56,7 +60,7 @@ export default function PrivacyPage() {
       </div>
 
       <div style={{ marginTop: 60, paddingTop: 32, borderTop: "1px solid var(--border)", fontSize: 13, color: "var(--muted)" }}>
-        © 2026 AI-PatternWeb. Tüm hakları saklıdır. · <a href="/terms" style={{ color: "var(--accent2)" }}>Kullanım Şartları</a>
+        {t("legal.copyright")} · <a href="/terms" style={{ color: "var(--accent2)" }}>{t("legal.termsLink")}</a>
       </div>
     </div>
   );

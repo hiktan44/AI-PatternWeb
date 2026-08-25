@@ -1,6 +1,10 @@
 "use client";
 
+import { useT } from "@/lib/i18n";
+
 export default function TermsPage() {
+  const t = useT();
+
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "80px 5% 60px" }}>
       <a href="/" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18, marginBottom: 40 }}>
@@ -8,10 +12,10 @@ export default function TermsPage() {
         AI-PatternWeb
       </a>
 
-      <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 36, fontWeight: 800, marginBottom: 32, letterSpacing: -1 }}>Kullanım Şartları</h1>
+      <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 36, fontWeight: 800, marginBottom: 32, letterSpacing: -1 }}>{t("terms.title")}</h1>
 
       <div style={{ fontSize: 15, color: "var(--muted)", lineHeight: 2 }}>
-        <p style={{ marginBottom: 24 }}>Son güncelleme: Mart 2026</p>
+        <p style={{ marginBottom: 24 }}>{t("terms.lastUpdated")}</p>
 
         <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 12, marginTop: 32 }}>1. Hizmet Tanımı</h2>
         <p style={{ marginBottom: 24 }}>AI-PatternWeb, yapay zeka destekli, kural tabanlı bir web-based pattern engineering platformudur. Platform, görsel ve teknik verilerden üretim-güvenli 2D kalıp, seri, dikiş payı ve pastal yerleşimi oluşturma hizmeti sunmaktadır.</p>
@@ -33,7 +37,7 @@ export default function TermsPage() {
       </div>
 
       <div style={{ marginTop: 60, paddingTop: 32, borderTop: "1px solid var(--border)", fontSize: 13, color: "var(--muted)" }}>
-        © 2026 AI-PatternWeb. Tüm hakları saklıdır. · <a href="/privacy" style={{ color: "var(--accent2)" }}>Gizlilik Politikası</a>
+        {t("legal.copyright")} · <a href="/privacy" style={{ color: "var(--accent2)" }}>{t("legal.privacyLink")}</a>
       </div>
     </div>
   );

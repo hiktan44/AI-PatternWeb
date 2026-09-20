@@ -1,0 +1,9 @@
+# AI-PatternWeb
+
+> Yapay zekâ destekli kalıp mühendisliği ve üretim hazırlık platformu.
+
+- Resmî site: https://pattern.seymata.com/
+- Gizlilik ve KVKK: https://pattern.seymata.com/privacy
+- Kullanım koşulları: https://pattern.seymata.com/terms
+- Çerez politikası: https://pattern.seymata.com/cookies
+- İletişim: https://pattern.seymata.com/contact

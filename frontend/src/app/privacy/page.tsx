@@ -18,7 +18,7 @@ export default function PrivacyPage() {
         <p style={{ marginBottom: 24 }}>{t("privacy.lastUpdated")}</p>
 
         <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 12, marginTop: 32 }}>1. Veri Sorumlusu</h2>
-        <p style={{ marginBottom: 24 }}>AI-PatternWeb platformu, 6698 sayılı Kişisel Verilerin Korunması Kanunu (&quot;KVKK&quot;) kapsamında veri sorumlusu sıfatıyla kişisel verilerinizi işlemektedir.</p>
+        <p style={{ marginBottom: 24 }}><strong>STRATEJİ DANIŞMANLIK HİZMETLERİ SAN. VE TİC. A.Ş.</strong>, AI-PatternWeb hizmetinde 6698 sayılı Kişisel Verilerin Korunması Kanunu (&quot;KVKK&quot;) kapsamında veri sorumlusudur.</p>
 
         <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 12, marginTop: 32 }}>2. İşlenen Kişisel Veriler</h2>
         <ul style={{ paddingLeft: 24, marginBottom: 24 }}>
@@ -39,7 +39,7 @@ export default function PrivacyPage() {
         </ul>
 
         <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 12, marginTop: 32 }}>4. Veri Güvenliği</h2>
-        <p style={{ marginBottom: 24 }}>Kişisel verileriniz SSL/TLS şifrelemesi ile korunmakta olup, Türkiye&apos;de barındırılan sunucularımızda güvenli bir şekilde saklanmaktadır. Erişim yetkilendirmesi, şifreleme ve düzenli güvenlik testleri ile verilerinizin güvenliği sağlanmaktadır.</p>
+        <p style={{ marginBottom: 24 }}>Kişisel veriler için erişim yetkilendirmesi, aktarım güvenliği ve hizmetin niteliğine uygun teknik ve idari tedbirler uygulanır. Hizmet için zorunlu altyapı sağlayıcılarıyla paylaşım, amaç ve yetkiyle sınırlı tutulur.</p>
 
         <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 12, marginTop: 32 }}>5. Haklarınız (KVKK Madde 11)</h2>
         <ul style={{ paddingLeft: 24, marginBottom: 24 }}>
@@ -53,14 +53,14 @@ export default function PrivacyPage() {
         </ul>
 
         <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 12, marginTop: 32 }}>6. AI Kullanımı</h2>
-        <p style={{ marginBottom: 24 }}>Platformumuz, kalıp analizi ve optimizasyonu için yapay zeka teknolojileri kullanmaktadır. Yüklediğiniz görseller ve teknik veriler, yalnızca hizmet sunumu amacıyla işlenmekte olup üçüncü taraflarla paylaşılmamaktadır. AI modelleri eğitiminde kişisel verileriniz kullanılmamaktadır.</p>
+        <p style={{ marginBottom: 24 }}>Platform, kalıp analizi ve optimizasyonu için yapay zekâ teknolojileri kullanabilir. Yüklenen görsel ve teknik veriler talep edilen hizmetin üretilmesi için yapılandırılmış sağlayıcılara aktarılabilir; güncel sağlayıcı ve işleme kapsamı hizmet yapılandırmasına göre değerlendirilir.</p>
 
         <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 12, marginTop: 32 }}>7. İletişim</h2>
-        <p>KVKK kapsamındaki talepleriniz için: <strong>kvkk@aipatternweb.com</strong></p>
+        <p>KVKK kapsamındaki talepleriniz için: <strong>info@stratejidanismanlik.com.tr</strong><br />Zafer Mah. Kumrulu Sok. No. 2/18 Bahçelievler/İstanbul · Yenibosna V.D. · Vergi No: 7810520457</p>
       </div>
 
       <div style={{ marginTop: 60, paddingTop: 32, borderTop: "1px solid var(--border)", fontSize: 13, color: "var(--muted)" }}>
-        {t("legal.copyright")} · <a href="/terms" style={{ color: "var(--accent2)" }}>{t("legal.termsLink")}</a>
+        {t("legal.copyright")} · <a href="/terms" style={{ color: "var(--accent2)" }}>{t("legal.termsLink")}</a> · <a href="/cookies">Çerez Politikası</a> · <a href="/contact">İletişim</a>
       </div>
     </div>
   );

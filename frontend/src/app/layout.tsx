@@ -44,6 +44,7 @@ export default function RootLayout({
               operatingSystem: "Web",
               url: siteUrl,
               description: metadata.description,
+              publisher: { "@type": "Organization", name: "STRATEJİ DANIŞMANLIK HİZMETLERİ SAN. VE TİC. A.Ş.", taxID: "7810520457", email: "info@stratejidanismanlik.com.tr" },
             }),
           }}
         />

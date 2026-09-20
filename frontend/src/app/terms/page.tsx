@@ -30,14 +30,14 @@ export default function TermsPage() {
         <p style={{ marginBottom: 24 }}>Kullanıcılar, hesap bilgilerinin güvenliğinden sorumludur. Şüpheli aktivite tespit edilmesi halinde derhal bildirimde bulunulmalıdır.</p>
 
         <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 12, marginTop: 32 }}>5. Ödeme ve İade</h2>
-        <p style={{ marginBottom: 24 }}>Abonelik iptalleri ilgili dönem sonunda geçerli olur. 14 günlük ücretsiz deneme süresi bitiminde otomatik ücretlendirme yapılmaz, kullanıcı aktif olarak plan seçmelidir. İade talepleri 7 iş günü içinde değerlendirilir.</p>
+        <p style={{ marginBottom: 24 }}>Güncel ücret, yenileme, iptal ve varsa iade koşulları satın alma işleminden önce ilgili ekranda gösterilir. İşlem öncesinde gösterilmeyen süre veya koşullar taahhüt edilmiş sayılmaz.</p>
 
         <h2 style={{ fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 12, marginTop: 32 }}>6. Uyuşmazlık</h2>
         <p style={{ marginBottom: 24 }}>İşbu sözleşmeden doğan uyuşmazlıklarda Türkiye Cumhuriyeti kanunları uygulanır.</p>
       </div>
 
       <div style={{ marginTop: 60, paddingTop: 32, borderTop: "1px solid var(--border)", fontSize: 13, color: "var(--muted)" }}>
-        {t("legal.copyright")} · <a href="/privacy" style={{ color: "var(--accent2)" }}>{t("legal.privacyLink")}</a>
+        {t("legal.copyright")} · <a href="/privacy" style={{ color: "var(--accent2)" }}>{t("legal.privacyLink")}</a> · <a href="/cookies">Çerez Politikası</a> · <a href="/contact">İletişim</a>
       </div>
     </div>
   );

@@ -37,7 +37,9 @@ services:
       - ENVIRONMENT=production
       - VERTEX_API_KEY=${VERTEX_API_KEY}
       - VERTEX_MODEL=${VERTEX_MODEL:-gemini-3.5-flash}
-      - JWT_SECRET=${JWT_SECRET:-change-this-in-production}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET için güçlü bir değer gerekiyor}
+      - TRUSTED_HOSTS=${TRUSTED_HOSTS:?TRUSTED_HOSTS için uygulama alan adlarını belirtin}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
     depends_on:
       - postgres
@@ -49,6 +51,7 @@ services:
       dockerfile: Dockerfile
       args:
         - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8000}
+        - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
     container_name: patternweb_frontend
     restart: unless-stopped
     ports:

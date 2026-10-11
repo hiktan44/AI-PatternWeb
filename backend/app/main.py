@@ -78,8 +78,8 @@ app.add_middleware(
 )
 
 # 2. Trusted Host — sadece izin verilen host'lar
-trusted_hosts = os.environ.get("TRUSTED_HOSTS", "localhost,127.0.0.1").split(",")
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=[h.strip() for h in trusted_hosts] + ["*"])
+trusted_hosts = settings.TRUSTED_HOSTS.split(",")
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=trusted_hosts)
 
 
 # 3. Security Headers Middleware
@@ -91,7 +91,7 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    if os.environ.get("ENVIRONMENT") == "production":
+    if settings.ENVIRONMENT == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
     return response
 
@@ -102,7 +102,7 @@ async def rate_limit_middleware(request: Request, call_next):
     # Geliştirme ve test kolaylığı için local host veya test ortamlarını rate limit'ten muaf tut
     client_ip = request.client.host if request.client else "unknown"
     if (
-        os.environ.get("ENVIRONMENT") in ("development", "test")
+        settings.ENVIRONMENT in ("development", "test")
         or client_ip in ("127.0.0.1", "localhost", "::1")
         or request.url.path in ("/health", "/api/v1/docs", "/openapi.json")
     ):

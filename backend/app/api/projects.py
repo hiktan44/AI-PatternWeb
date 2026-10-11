@@ -1,5 +1,7 @@
 """Proje yönetimi API — Input validation ile güvenli"""
 import logging
+from copy import deepcopy
+import math
 import os
 import uuid
 from typing import List, Any
@@ -188,64 +190,24 @@ async def qa_validate(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Projenin en son üretilen kalıbını doğrula"""
-    _validate_uuid(project_id, "proje ID")
-    
-    # Proje erişim kontrolü
-    proj_result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.user_id == user.id)
-    )
-    if not proj_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Proje bulunamadı")
+    """Kayıtları değiştirmeden mevcut gerçek kalıp için kalite kontrolü yap."""
+    project = await require_owned_project(db, user.id, project_id)
 
     # En güncel analizli dosyayı bul
-    stmt = select(ProjectFile).where(
-        ProjectFile.project_id == project_id,
+    stmt = owned_files_query(user.id, project_id).where(
         ProjectFile.analysis_result.isnot(None)
     ).order_by(ProjectFile.created_at.desc())
     result = await db.execute(stmt)
     project_file = result.scalars().first()
 
-    if not project_file or not project_file.analysis_result:
-        # Alternatif olarak en yeni dosyayı bul ve dene
-        stmt2 = select(ProjectFile).where(ProjectFile.project_id == project_id).order_by(ProjectFile.created_at.desc())
-        result2 = await db.execute(stmt2)
-        project_file = result2.scalars().first()
-        
-        if not project_file or not project_file.analysis_result:
-            import uuid
-            from datetime import datetime
-            from app.services.ai_analysis import _demo_pattern
-            
-            demo_pat = _demo_pattern()
-            mock_analysis = {
-                "status": "success",
-                "confidence": 0.95,
-                "garment_type": "tshirt",
-                "pieces": demo_pat.get("pieces", {})
-            }
-            
-            if not project_file:
-                project_file = ProjectFile(
-                    id=str(uuid.uuid4()),
-                    project_id=project_id,
-                    filename="demo_pattern.png",
-                    file_path="uploads/demo_pattern.png",
-                    file_type="image/png",
-                    analysis_result=mock_analysis,
-                    confidence_score=0.95,
-                    created_at=datetime.utcnow()
-                )
-                db.add(project_file)
-            else:
-                project_file.analysis_result = mock_analysis
-                project_file.confidence_score = 0.95
-                
-            await db.commit()
-            await db.refresh(project_file)
-
-    analysis_res = project_file.analysis_result or {}
-    pieces_dict = analysis_res.get("pieces", {})
+    analysis_res = project_file.analysis_result if project_file is not None else None
+    legacy_demo_file = project_file is not None and project_file.file_path.replace("\\", "/").rstrip("/").split("/")[-2:] == ["uploads", "demo_pattern.png"]
+    if (not isinstance(analysis_res, dict) or not analysis_res or analysis_res.get("demo_mode") or
+            analysis_res.get("error") or legacy_demo_file):
+        raise HTTPException(status_code=409, detail="Doğrulanacak gerçek kalıp analizi bulunamadı. Önce kalıp üretip kaydedin; örnek sonuçlar kalite onayı sayılmaz.")
+    pieces_dict = deepcopy(analysis_res.get("pieces"))
+    if not isinstance(pieces_dict, (dict, list)) or not pieces_dict:
+        raise HTTPException(status_code=409, detail="Analiz kaydında doğrulanacak kalıp parçaları yok. Önce kalıp üretip kaydedin.")
 
     # Dict -> List[dict] dönüşümü (qa_validation.py için)
     pieces_list = []
@@ -257,19 +219,18 @@ async def qa_validate(
             pieces_list.append(piece_item)
     elif isinstance(pieces_dict, list):
         pieces_list = pieces_dict
+    if not pieces_list or any(not isinstance(piece, dict) for piece in pieces_list):
+        raise HTTPException(status_code=409, detail="Kayıtlı kalıp parçaları doğrulanabilir biçimde değil")
+    for piece in pieces_list:
+        coords = piece.get("coords")
+        if (not isinstance(coords, (list, tuple)) or len(coords) < 3 or
+                any(not isinstance(point, (list, tuple)) or len(point) != 2 or
+                    any(not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value)
+                        for value in point) for point in coords)):
+            raise HTTPException(status_code=409, detail="Kalıp parçalarında doğrulanacak geçerli koordinatlar yok")
 
     # QA validation çalıştır
-    qa_result = run_qa_validation(pieces_list, {"category": getattr(proj_result, "category", None)})
-    
-    if qa_result.get("score", 100) < 80:
-        await trigger_qa_failed_event(
-            project_id=project_id,
-            score=qa_result.get("score", 0.0),
-            error_count=qa_result.get("failed_checks", 0),
-            critical_errors=qa_result.get("critical_failures", [])
-        )
-
-    return qa_result
+    return run_qa_validation(pieces_list, {"category": project.category})
 
 
 @router.post("/{project_id}/qa-autofix")

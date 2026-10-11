@@ -401,7 +401,7 @@ async def generate_pattern_websocket(websocket: WebSocket, db: AsyncSession = De
         return
         
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        payload = jwt.decode(token, settings.JWT_SECRET.get_secret_value(), algorithms=[settings.JWT_ALGORITHM])
         user_id: str = payload.get("sub")
         if not user_id:
             await websocket.send_json({"step": "error", "message": "Geçersiz yetkilendirme token'ı."})
@@ -417,6 +417,10 @@ async def generate_pattern_websocket(websocket: WebSocket, db: AsyncSession = De
     user = result.scalar_one_or_none()
     if not user:
         await websocket.send_json({"step": "error", "message": "Kullanıcı bulunamadı."})
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    if not user.is_active:
+        await websocket.send_json({"step": "error", "message": "Hesabınız devre dışı."})
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
         

@@ -2,18 +2,18 @@
 import logging
 import re
 import time
-import uuid
 import secrets
 from datetime import datetime, timedelta, timezone
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
-from app.core.config import settings
 from app.core.database import get_db
+from app.core.google_identity import verify_google_identity
 from app.core.security import hash_password, verify_password, create_access_token, get_current_user
 from app.models.user import User
 from app.schemas import RegisterRequest, LoginRequest, TokenResponse, UserResponse
@@ -57,7 +57,7 @@ def _validate_password(password: str):
 
 
 class GoogleTokenRequest(BaseModel):
-    token: str
+    token: str = Field(min_length=1, max_length=16384)
     is_access_token: bool = False
 
 
@@ -113,54 +113,43 @@ async def get_me(user: User = Depends(get_current_user)):
 
 @router.post("/google", response_model=TokenResponse)
 async def google_login(data: GoogleTokenRequest, db: AsyncSession = Depends(get_db)):
-    """Google OAuth ile giriş/kayıt"""
-    google_user_info = None
-
-    try:
-        if data.is_access_token:
-            # Google access_token ile userinfo al
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    "https://www.googleapis.com/oauth2/v3/userinfo",
-                    headers={"Authorization": f"Bearer {data.token}"},
-                )
-                if resp.status_code != 200:
-                    raise HTTPException(status_code=401, detail="Google token geçersiz")
-                google_user_info = resp.json()
+    """İmzalı ID tokenını doğrula, kalıcı Google subject ile hesabı çöz."""
+    if data.is_access_token:
+        raise HTTPException(status_code=401, detail="Bu giriş için Google ID tokenı gerekiyor")
+    identity = await run_in_threadpool(verify_google_identity, data.token)
+    user = (await db.execute(select(User).where(User.google_sub == identity.subject))).scalar_one_or_none()
+    if user is None:
+        # Eski hesabı bağlayan işlemler aynı satır üzerinde sıraya girer.
+        user = (await db.execute(
+            select(User).where(User.email == identity.email).with_for_update()
+        )).scalar_one_or_none()
+        if user is not None:
+            if not user.is_active:
+                raise HTTPException(status_code=403, detail="Hesabınız devre dışı")
+            if user.google_sub != identity.subject:
+                if user.google_sub is not None or not user.email_verified or not identity.authoritative_email:
+                    raise HTTPException(status_code=409, detail="Mevcut hesabı doğrulayarak Google hesabını bağlamanız gerekiyor")
+                user.google_sub = identity.subject
         else:
-            # Google id_token doğrula
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"https://oauth2.googleapis.com/tokeninfo?id_token={data.token}"
-                )
-                if resp.status_code != 200:
-                    raise HTTPException(status_code=401, detail="Google token geçersiz")
-                google_user_info = resp.json()
-    except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Google sunucusuna ulaşılamadı")
-
-    email = google_user_info.get("email")
-    name = google_user_info.get("name") or google_user_info.get("given_name", "Kullanıcı")
-
-    if not email:
-        raise HTTPException(status_code=400, detail="Google hesabından email alınamadı")
-
-    # Kullanıcıyı bul veya oluştur
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        user = User(
-            email=email,
-            name=name,
-            password_hash=hash_password(secrets.token_urlsafe(32)),
-            email_verified=True,
-            trial_ends_at=datetime.now(timezone.utc) + timedelta(days=14),
-        )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-    elif not user.is_active:
+            user = User(
+                email=identity.email,
+                google_sub=identity.subject,
+                name=identity.name,
+                password_hash=hash_password(secrets.token_urlsafe(32)),
+                email_verified=True,
+                trial_ends_at=datetime.now(timezone.utc) + timedelta(days=14),
+            )
+            db.add(user)
+        try:
+            await db.commit()
+            await db.refresh(user)
+        except IntegrityError:
+            # Eşzamanlı kayıt yalnız aynı subject'e ait hesapla devam edebilir.
+            await db.rollback()
+            user = (await db.execute(select(User).where(User.google_sub == identity.subject))).scalar_one_or_none()
+            if user is None:
+                raise HTTPException(status_code=409, detail="Google hesabı güvenli biçimde bağlanamadı") from None
+    if not user.is_active:
         raise HTTPException(status_code=403, detail="Hesabınız devre dışı")
 
     token = create_access_token({"sub": user.id})

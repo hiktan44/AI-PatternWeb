@@ -1,5 +1,6 @@
 """Uygulama konfigürasyonu — tüm env değişkenleri buradan yönetilir"""
-from pydantic_settings import BaseSettings
+from pydantic import SecretStr, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -10,7 +11,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # JWT
-    JWT_SECRET: str = "change-this-in-production"
+    JWT_SECRET: SecretStr
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_MINUTES: int = 1440
 
@@ -31,6 +32,8 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
 
     # App
+    ENVIRONMENT: str = "production"
+    TRUSTED_HOSTS: str = "localhost,127.0.0.1"
     ALLOWED_ORIGINS: str = "http://localhost:3000"
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE_MB: int = 50
@@ -46,9 +49,24 @@ class Settings(BaseSettings):
     ZAPIER_WEBHOOK_URL: str = ""
     N8N_WEBHOOK_URL: str = ""
 
-    class Config:
-        env_file = ".env"
-        extra = "allow"
+    model_config = SettingsConfigDict(env_file=".env", extra="allow", hide_input_in_errors=True)
+
+    @field_validator("JWT_SECRET")
+    @classmethod
+    def validate_jwt_secret(cls, value: SecretStr) -> SecretStr:
+        secret = value.get_secret_value()
+        if (len(secret.encode()) < 32 or len(set(secret)) < 8 or
+                secret.lower().startswith(("change-", "your-", "example-", "development-", "test-secret"))):
+            raise ValueError("JWT_SECRET için güçlü, en az 32 baytlık ayrı bir sır gerekiyor")
+        return value
+
+    @field_validator("TRUSTED_HOSTS")
+    @classmethod
+    def validate_trusted_hosts(cls, value: str) -> str:
+        hosts = [host.strip() for host in value.split(",") if host.strip()]
+        if not hosts or "*" in hosts:
+            raise ValueError("TRUSTED_HOSTS boş olamaz ve genel joker içeremez")
+        return ",".join(hosts)
 
 
 settings = Settings()

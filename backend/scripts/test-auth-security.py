@@ -48,7 +48,7 @@ socket.socket.sendto = blocked_sendto
 with tempfile.TemporaryDirectory(prefix="codex_aipattern_auth_") as directory:
     os.chdir(directory)  # Kullanıcının .env dosyasını okumaz.
     os.environ["UPLOAD_DIR"] = str(Path(directory) / "uploads")
-    suite = unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_auth_security.py")
+    suite = unittest.defaultTestLoader.discover(str(root / "tests"), pattern="test_*security.py")
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     if result.wasSuccessful():
         import test_calibration

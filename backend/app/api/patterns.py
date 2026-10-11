@@ -14,6 +14,7 @@ from jose import JWTError, jwt
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.project_access import require_owned_project, require_owned_file
 from app.models.user import User
 from app.models.project import Project, ProjectFile
 from app.services.ai_analysis import (
@@ -129,14 +130,8 @@ async def analyze_file(
     db: AsyncSession = Depends(get_db),
 ):
     """Yüklenen dosyayı AI ile analiz et"""
-    result = await db.execute(select(Project).where(Project.id == data.project_id, Project.user_id == user.id))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Proje bulunamadı")
-
-    file_result = await db.execute(select(ProjectFile).where(ProjectFile.id == data.file_id))
-    project_file = file_result.scalar_one_or_none()
-    if not project_file:
-        raise HTTPException(status_code=404, detail="Dosya bulunamadı")
+    await require_owned_project(db, user.id, data.project_id)
+    project_file = await require_owned_file(db, user.id, data.project_id, data.file_id)
 
     if user.credits <= 0:
         raise HTTPException(status_code=402, detail="Yetersiz kredi")
@@ -168,16 +163,12 @@ async def generate_pattern(
     db: AsyncSession = Depends(get_db),
 ):
     """AI ile resimden gerçek kalıp üret veya şablondan oluştur"""
-    result = await db.execute(select(Project).where(Project.id == data.project_id, Project.user_id == user.id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Proje bulunamadı")
+    project = await require_owned_project(db, user.id, data.project_id)
 
     # Dosya varsa AI ile resimden kalıp üret
     ai_pattern = None
     if data.file_id:
-        file_result = await db.execute(select(ProjectFile).where(ProjectFile.id == data.file_id))
-        project_file = file_result.scalar_one_or_none()
+        project_file = await require_owned_file(db, user.id, data.project_id, data.file_id)
 
         if project_file and os.path.exists(project_file.file_path):
             # Önceki analiz sonuçları varsa kullan

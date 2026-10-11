@@ -12,6 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.project_access import require_owned_project, require_owned_file, owned_files_query
 from app.models.user import User
 from app.models.project import Project, ProjectFile, AuditLog
 from app.schemas import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectFileResponse
@@ -155,8 +156,8 @@ async def upload_file(
 @router.get("/{project_id}/files", response_model=List[ProjectFileResponse])
 async def list_files(project_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Projedeki dosyaları listele"""
-    _validate_uuid(project_id, "proje ID")
-    result = await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id))
+    await require_owned_project(db, user.id, project_id)
+    result = await db.execute(owned_files_query(user.id, project_id))
     return [ProjectFileResponse.model_validate(f) for f in result.scalars().all()]
 
 
@@ -168,15 +169,8 @@ async def download_file(
     db: AsyncSession = Depends(get_db),
 ):
     """Projedeki dosyayı indir"""
-    _validate_uuid(project_id, "proje ID")
-    _validate_uuid(file_id, "dosya ID")
     from fastapi.responses import FileResponse as FastFileResponse
-    result = await db.execute(
-        select(ProjectFile).where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
-    )
-    project_file = result.scalar_one_or_none()
-    if not project_file:
-        raise HTTPException(status_code=404, detail="Dosya bulunamadı")
+    project_file = await require_owned_file(db, user.id, project_id, file_id)
 
     if not os.path.exists(project_file.file_path):
         raise HTTPException(status_code=404, detail="Dosya diskte bulunamadı")
